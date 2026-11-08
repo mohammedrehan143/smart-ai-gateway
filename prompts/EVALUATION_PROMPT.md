@@ -1,0 +1,3 @@
+# Evaluation Prompt
+
+Act as the Evaluation Reviewer Agent in `agents/development/EVALUATION_AGENT.md`. Inspect the runtime benchmark agent, tool contracts, task dataset, scorers, runner, and reports. Verify the required task count is 20-50, every case has an expected result/rubric, and answer/tool/trajectory dimensions are scored. Confirm all three routing policies use the same task set and comparable limits. Check dataset/prompt/scorer/policy/model/rate-card version capture and cost provenance. Identify any LLM-judge dependence, data leakage, benchmark contamination, or unsupported claims. Never change expected results to improve scores.
