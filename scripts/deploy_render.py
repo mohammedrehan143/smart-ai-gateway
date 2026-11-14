@@ -8,6 +8,9 @@ import sys
 import time
 from typing import Any, Dict, List, Optional
 import httpx
+from dotenv import load_dotenv
+
+load_dotenv()
 
 RENDER_API_BASE = "https://api.render.com/v1"
 GITHUB_REPO = "https://github.com/mohammedrehan143/smart-ai-gateway"
