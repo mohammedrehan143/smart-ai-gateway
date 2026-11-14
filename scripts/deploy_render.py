@@ -87,9 +87,9 @@ class RenderDeployer:
 
     def trigger_deploy(self, service_id: str) -> Dict[str, Any]:
         resp = self.client.post(f"/services/{service_id}/deploys")
-        if resp.status_code not in (200, 201):
+        if resp.status_code not in (200, 201, 202):
             raise RuntimeError(f"Failed to trigger deploy: {resp.status_code} {resp.text}")
-        return resp.json()
+        return resp.json() if resp.text else {"status": "triggered"}
 
     def get_deploy_status(self, service_id: str, deploy_id: str) -> Dict[str, Any]:
         resp = self.client.get(f"/services/{service_id}/deploys/{deploy_id}")

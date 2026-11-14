@@ -15,6 +15,13 @@ router = APIRouter(prefix="/v1", tags=["Chat"])
     status_code=status.HTTP_200_OK,
     dependencies=[Depends(verify_gateway_auth)],
 )
+@router.post(
+    "/chat/completions",
+    response_model=ChatCompletionResponse,
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(verify_gateway_auth)],
+    include_in_schema=False,
+)
 async def create_chat_completion(
     request: ChatCompletionRequest,
     x_request_id: Optional[str] = Header(None, alias="X-Request-ID"),

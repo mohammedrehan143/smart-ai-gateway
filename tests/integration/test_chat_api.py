@@ -50,3 +50,17 @@ async def test_chat_completion_validation_error(async_client: AsyncClient):
     data = resp.json()
     assert "error" in data
     assert data["error"]["type"] == "invalid_request"
+
+
+@pytest.mark.asyncio
+async def test_chat_completions_alias_success(async_client: AsyncClient):
+    payload = {
+        "messages": [
+            {"role": "user", "content": "Testing OpenAI-compatible completions endpoint"},
+        ],
+    }
+    resp = await async_client.post("/v1/chat/completions", json=payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["object"] == "gateway.completion"
+

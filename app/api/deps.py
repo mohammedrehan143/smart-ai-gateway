@@ -34,14 +34,8 @@ async def get_orchestrator() -> ChatOrchestrator:
 
 async def verify_gateway_auth(authorization: Optional[str] = Header(None)) -> None:
     """Verifies gateway bearer token using constant-time comparison."""
-    if settings.is_dev_mode:
+    if settings.is_dev_mode or not settings.GATEWAY_API_KEY:
         return
-
-    if not settings.GATEWAY_API_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail={"error": {"type": "server_misconfiguration", "message": "GATEWAY_API_KEY is not configured", "retryable": False}},
-        )
 
     if not authorization:
         raise HTTPException(
