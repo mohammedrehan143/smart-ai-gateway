@@ -12,10 +12,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
-import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -255,13 +253,6 @@ class MasterOrchestratorAgent:
         print(result.stdout)
         if result.stderr:
             print(result.stderr)
-
-        passed = 0
-        failed = 0
-        for line in result.stdout.splitlines():
-            if "passed" in line and ("failed" in line or "error" in line or line.strip().endswith("passed")):
-                # summary line like "12 passed in 0.45s"
-                pass
 
         if result.returncode == 0:
             print(f"[PASS] All tests passed for Phase {phase_id}!")

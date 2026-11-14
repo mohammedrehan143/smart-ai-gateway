@@ -45,3 +45,16 @@ class BaseTraceRepository(ABC):
     @abstractmethod
     async def get_usage(self, gateway_request_id: str) -> Optional[UsageRecord]:
         pass
+
+    async def get_usage_summary(self, since_timestamp: Optional[float] = None, limit: int = 100) -> dict:
+        return {}
+
+    async def get_cost_summary(self, since_timestamp: Optional[float] = None) -> dict:
+        return {}
+
+    async def get_recent_decisions(self, limit: int = 20) -> list:
+        return []
+
+    async def get_recent_requests(self, limit: int = 50, since_timestamp: Optional[float] = None) -> list:
+        return []
+

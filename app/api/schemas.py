@@ -29,6 +29,8 @@ class ChatCompletionRequest(BaseModel):
     routing: RoutingSchema = Field(default_factory=RoutingSchema)
     parameters: ParametersSchema = Field(default_factory=ParametersSchema)
     metadata: Optional[Dict[str, Any]] = None
+    stream: bool = False
+
 
 
 class ChoiceMessage(BaseModel):

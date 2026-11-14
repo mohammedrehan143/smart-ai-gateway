@@ -334,3 +334,244 @@ class SqliteTraceRepository(BaseTraceRepository):
                 currency=row["currency"] or "USD",
                 cost_status=row["cost_status"] or "unavailable",
             )
+
+    async def get_usage_summary(self, since_timestamp: Optional[float] = None, limit: int = 100) -> dict:
+        """Aggregates request volumes, tokens, latencies, and cache metrics."""
+        async with self._get_conn() as conn:
+            where_req = "WHERE created_at >= ?" if since_timestamp else ""
+            params = (since_timestamp,) if since_timestamp else ()
+
+            # Total requests, avg latency, cache counts
+            cursor = await conn.execute(
+                f"""
+                SELECT
+                    COUNT(*) as total_requests,
+                    COALESCE(AVG(latency_ms), 0.0) as avg_latency_ms,
+                    SUM(CASE WHEN cache_status = 'hit' THEN 1 ELSE 0 END) as cache_hits,
+                    SUM(CASE WHEN fallback_used = 1 THEN 1 ELSE 0 END) as fallback_count
+                FROM gateway_requests {where_req}
+                """,
+                params,
+            )
+            req_stats = await cursor.fetchone()
+            total_requests = req_stats["total_requests"] if req_stats else 0
+            avg_latency_ms = round(float(req_stats["avg_latency_ms"]), 2) if req_stats else 0.0
+            cache_hits = req_stats["cache_hits"] if req_stats else 0
+            fallback_count = req_stats["fallback_count"] if req_stats else 0
+            cache_hit_rate = round(cache_hits / total_requests, 4) if total_requests > 0 else 0.0
+
+            # Token statistics from usage_records
+            token_query = f"""
+                SELECT
+                    COALESCE(SUM(u.input_tokens), 0) as total_input_tokens,
+                    COALESCE(SUM(u.output_tokens), 0) as total_output_tokens,
+                    COALESCE(SUM(u.total_tokens), 0) as total_tokens
+                FROM usage_records u
+                JOIN gateway_requests r ON u.gateway_request_id = r.id
+                {where_req}
+            """
+            cursor = await conn.execute(token_query, params)
+            token_stats = await cursor.fetchone()
+            input_tokens = token_stats["total_input_tokens"] if token_stats else 0
+            output_tokens = token_stats["total_output_tokens"] if token_stats else 0
+            total_tokens = token_stats["total_tokens"] if token_stats else 0
+
+            # Policy breakdown
+            cursor = await conn.execute(
+                f"SELECT routing_policy, COUNT(*) as count FROM gateway_requests {where_req} GROUP BY routing_policy",
+                params,
+            )
+            policy_rows = await cursor.fetchall()
+            policy_breakdown = {row["routing_policy"] or "adaptive": row["count"] for row in policy_rows}
+
+            # Model breakdown
+            cursor = await conn.execute(
+                f"SELECT final_model_alias, COUNT(*) as count FROM gateway_requests {where_req} GROUP BY final_model_alias",
+                params,
+            )
+            model_rows = await cursor.fetchall()
+            model_breakdown = {row["final_model_alias"] or "unknown": row["count"] for row in model_rows}
+
+            # Recent requests
+            cursor = await conn.execute(
+                f"""
+                SELECT id, trace_id, created_at, routing_policy, final_model_alias, status, latency_ms, cache_status
+                FROM gateway_requests {where_req}
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (*params, limit),
+            )
+            recent_rows = await cursor.fetchall()
+            recent_requests = [
+                {
+                    "id": row["id"],
+                    "trace_id": row["trace_id"],
+                    "created_at": row["created_at"],
+                    "policy": row["routing_policy"],
+                    "model": row["final_model_alias"],
+                    "status": row["status"],
+                    "latency_ms": row["latency_ms"],
+                    "cached": row["cache_status"] == "hit",
+                }
+                for row in recent_rows
+            ]
+
+            return {
+                "total_requests": total_requests,
+                "total_input_tokens": input_tokens,
+                "total_output_tokens": output_tokens,
+                "total_tokens": total_tokens,
+                "avg_latency_ms": avg_latency_ms,
+                "cache_hits": cache_hits or 0,
+                "cache_hit_rate": cache_hit_rate,
+                "fallback_count": fallback_count or 0,
+                "policy_breakdown": policy_breakdown,
+                "model_breakdown": model_breakdown,
+                "recent_requests": recent_requests,
+            }
+
+    async def get_cost_summary(self, since_timestamp: Optional[float] = None) -> dict:
+        """Aggregates cost metrics across providers, models, and calculation status."""
+        async with self._get_conn() as conn:
+            where_req = "WHERE r.created_at >= ?" if since_timestamp else ""
+            params = (since_timestamp,) if since_timestamp else ()
+
+            # Total spend and status
+            cursor = await conn.execute(
+                f"""
+                SELECT
+                    COALESCE(SUM(u.estimated_cost), 0.0) as total_spend,
+                    COALESCE(SUM(CASE WHEN u.cost_status = 'calculated' THEN u.estimated_cost ELSE 0.0 END), 0.0) as calculated_spend,
+                    COALESCE(SUM(CASE WHEN u.cost_status = 'estimated' THEN u.estimated_cost ELSE 0.0 END), 0.0) as estimated_spend,
+                    u.currency
+                FROM usage_records u
+                JOIN gateway_requests r ON u.gateway_request_id = r.id
+                {where_req}
+                GROUP BY u.currency
+                """,
+                params,
+            )
+            cost_row = await cursor.fetchone()
+            total_spend = round(float(cost_row["total_spend"]), 6) if cost_row else 0.0
+            calculated_spend = round(float(cost_row["calculated_spend"]), 6) if cost_row else 0.0
+            estimated_spend = round(float(cost_row["estimated_spend"]), 6) if cost_row else 0.0
+            currency = cost_row["currency"] if cost_row else "USD"
+
+            # Spend by model
+            cursor = await conn.execute(
+                f"""
+                SELECT
+                    r.final_model_alias,
+                    COALESCE(SUM(u.estimated_cost), 0.0) as spend,
+                    COALESCE(SUM(u.total_tokens), 0) as tokens,
+                    COUNT(r.id) as request_count
+                FROM gateway_requests r
+                LEFT JOIN usage_records u ON r.id = u.gateway_request_id
+                {where_req}
+                GROUP BY r.final_model_alias
+                """,
+                params,
+            )
+            model_rows = await cursor.fetchall()
+            model_spend = {
+                row["final_model_alias"] or "unknown": {
+                    "spend": round(float(row["spend"]), 6),
+                    "tokens": row["tokens"],
+                    "requests": row["request_count"],
+                }
+                for row in model_rows
+            }
+
+            # Spend by provider
+            cursor = await conn.execute(
+                f"""
+                SELECT
+                    r.final_provider,
+                    COALESCE(SUM(u.estimated_cost), 0.0) as spend,
+                    COUNT(r.id) as request_count
+                FROM gateway_requests r
+                LEFT JOIN usage_records u ON r.id = u.gateway_request_id
+                {where_req}
+                GROUP BY r.final_provider
+                """,
+                params,
+            )
+            provider_rows = await cursor.fetchall()
+            provider_spend = {
+                row["final_provider"] or "unknown": {
+                    "spend": round(float(row["spend"]), 6),
+                    "requests": row["request_count"],
+                }
+                for row in provider_rows
+            }
+
+            return {
+                "total_spend": total_spend,
+                "calculated_spend": calculated_spend,
+                "estimated_spend": estimated_spend,
+                "currency": currency or "USD",
+                "model_breakdown": model_spend,
+                "provider_breakdown": provider_spend,
+            }
+
+    async def get_recent_decisions(self, limit: int = 20) -> list:
+        """Retrieves recent routing decisions with request context."""
+        async with self._get_conn() as conn:
+            cursor = await conn.execute(
+                """
+                SELECT
+                    d.id as decision_id,
+                    d.gateway_request_id,
+                    d.policy_name,
+                    d.policy_version,
+                    d.selected_provider,
+                    d.selected_model_alias,
+                    d.tier,
+                    d.reason_code,
+                    d.reason_message,
+                    d.feature_summary_json,
+                    d.created_at,
+                    r.trace_id,
+                    r.latency_ms,
+                    r.status as request_status,
+                    r.fallback_used,
+                    u.estimated_cost,
+                    u.total_tokens
+                FROM routing_decisions d
+                JOIN gateway_requests r ON d.gateway_request_id = r.id
+                LEFT JOIN usage_records u ON r.id = u.gateway_request_id
+                ORDER BY d.created_at DESC
+                LIMIT ?
+                """,
+                (limit,),
+            )
+            rows = await cursor.fetchall()
+            decisions = []
+            for row in rows:
+                features = {}
+                try:
+                    if row["feature_summary_json"]:
+                        features = json.loads(row["feature_summary_json"])
+                except Exception:
+                    features = {}
+
+                decisions.append({
+                    "decision_id": row["decision_id"],
+                    "trace_id": row["trace_id"],
+                    "policy": row["policy_name"],
+                    "policy_version": row["policy_version"],
+                    "selected_provider": row["selected_provider"],
+                    "selected_model": row["selected_model_alias"],
+                    "tier": row["tier"],
+                    "reason_code": row["reason_code"],
+                    "reason": row["reason_message"],
+                    "features": features,
+                    "latency_ms": row["latency_ms"] or 0,
+                    "total_tokens": row["total_tokens"] or 0,
+                    "cost_estimate": row["estimated_cost"],
+                    "fallback_used": bool(row["fallback_used"]),
+                    "created_at": row["created_at"],
+                })
+            return decisions
+

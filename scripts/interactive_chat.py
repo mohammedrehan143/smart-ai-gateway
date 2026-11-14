@@ -1,6 +1,5 @@
 """Interactive Terminal Chat Client for Smart AI Gateway."""
 
-import sys
 import httpx
 
 GATEWAY_URL = "http://localhost:8000/v1/chat"

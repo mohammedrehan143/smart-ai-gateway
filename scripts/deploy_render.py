@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-import time
 from typing import Any, Dict, List, Optional
 import httpx
 from dotenv import load_dotenv
@@ -118,7 +117,7 @@ def main():
         svc_id = existing["id"]
         url = existing.get("serviceDetails", {}).get("url", f"https://{args.name}.onrender.com")
         print(f"[FOUND] Existing service: '{args.name}' (ID: {svc_id})")
-        print(f"Triggering new deployment on branch 'main'...")
+        print("Triggering new deployment on branch 'main'...")
         deploy = deployer.trigger_deploy(svc_id)
         dep_id = deploy.get("id", "")
         print(f"[DEPLOYING] Deployment triggered (ID: {dep_id})")
