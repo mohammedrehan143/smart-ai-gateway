@@ -57,6 +57,22 @@ class RateCardCatalog:
                 output_rate_per_million=10.00,
                 version=version,
             ),
+            "claude-3-5-sonnet": RateCardEntry(
+                rate_card_id=f"rc_claude35sonnet_{version}",
+                model_alias="claude-3-5-sonnet",
+                provider="anthropic",
+                input_rate_per_million=3.00,
+                output_rate_per_million=15.00,
+                version=version,
+            ),
+            "gemini-1.5-flash": RateCardEntry(
+                rate_card_id=f"rc_gemini15flash_{version}",
+                model_alias="gemini-1.5-flash",
+                provider="google",
+                input_rate_per_million=0.075,
+                output_rate_per_million=0.30,
+                version=version,
+            ),
         }
 
     def get_rate(self, model_alias: str) -> Optional[RateCardEntry]:

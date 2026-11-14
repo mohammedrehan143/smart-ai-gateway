@@ -128,6 +128,73 @@ class SqliteTraceRepository(BaseTraceRepository):
                     FOREIGN KEY(gateway_request_id) REFERENCES gateway_requests(id)
                 );
                 CREATE INDEX IF NOT EXISTS idx_usage_req ON usage_records(gateway_request_id);
+
+                CREATE TABLE IF NOT EXISTS user_credentials (
+                    user_id TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    encrypted_key TEXT NOT NULL,
+                    base_url TEXT,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL,
+                    is_active INTEGER DEFAULT 1,
+                    PRIMARY KEY(user_id, provider)
+                );
+
+                CREATE TABLE IF NOT EXISTS budget_limits (
+                    user_id TEXT NOT NULL,
+                    project_id TEXT NOT NULL,
+                    max_cost_per_request REAL,
+                    daily_budget REAL,
+                    monthly_budget REAL,
+                    created_at REAL NOT NULL,
+                    PRIMARY KEY(user_id, project_id)
+                );
+
+                CREATE TABLE IF NOT EXISTS model_bandit_stats (
+                    category TEXT NOT NULL,
+                    model_alias TEXT NOT NULL,
+                    trials INTEGER DEFAULT 0,
+                    successes INTEGER DEFAULT 0,
+                    total_reward REAL DEFAULT 0.0,
+                    avg_reward REAL DEFAULT 0.5,
+                    avg_latency_ms REAL DEFAULT 100.0,
+                    avg_cost REAL DEFAULT 0.0005,
+                    last_updated REAL NOT NULL,
+                    PRIMARY KEY(category, model_alias)
+                );
+
+                CREATE TABLE IF NOT EXISTS agentic_execution_steps (
+                    id TEXT PRIMARY KEY,
+                    gateway_request_id TEXT NOT NULL,
+                    step_number INTEGER NOT NULL,
+                    title TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    assigned_model TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    latency_ms INTEGER,
+                    cost REAL,
+                    error_message TEXT,
+                    created_at REAL NOT NULL,
+                    FOREIGN KEY(gateway_request_id) REFERENCES gateway_requests(id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_steps_req ON agentic_execution_steps(gateway_request_id);
+
+                CREATE TABLE IF NOT EXISTS response_evaluations (
+                    id TEXT PRIMARY KEY,
+                    gateway_request_id TEXT NOT NULL,
+                    overall_score REAL NOT NULL,
+                    passed INTEGER NOT NULL,
+                    relevance_score REAL,
+                    adherence_score REAL,
+                    completeness_score REAL,
+                    code_score REAL,
+                    format_score REAL,
+                    should_escalate INTEGER,
+                    escalation_reason TEXT,
+                    created_at REAL NOT NULL,
+                    FOREIGN KEY(gateway_request_id) REFERENCES gateway_requests(id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_evals_req ON response_evaluations(gateway_request_id);
                 """
             )
             await conn.commit()
@@ -199,6 +266,18 @@ class SqliteTraceRepository(BaseTraceRepository):
 
     async def record_decision(self, record: RoutingDecision, gateway_request_id: str) -> None:
         async with self._get_conn() as conn:
+            summary = dict(record.feature_summary)
+            if hasattr(record, "complexity") and record.complexity:
+                summary["complexity"] = record.complexity
+            if hasattr(record, "strategy") and record.strategy:
+                summary["strategy"] = record.strategy
+            if hasattr(record, "alternative_eligible_models") and record.alternative_eligible_models:
+                summary["alternative_eligible_models"] = record.alternative_eligible_models
+            if hasattr(record, "estimated_cost") and record.estimated_cost is not None:
+                summary["estimated_cost"] = record.estimated_cost
+            if hasattr(record, "fallback_reason") and record.fallback_reason:
+                summary["fallback_reason"] = record.fallback_reason
+
             await conn.execute(
                 """
                 INSERT OR REPLACE INTO routing_decisions (
@@ -217,7 +296,7 @@ class SqliteTraceRepository(BaseTraceRepository):
                     record.tier,
                     record.reason_code,
                     record.reason_message,
-                    json.dumps(record.feature_summary),
+                    json.dumps(summary),
                     time.time(),
                 ),
             )
@@ -567,6 +646,10 @@ class SqliteTraceRepository(BaseTraceRepository):
                     "reason_code": row["reason_code"],
                     "reason": row["reason_message"],
                     "features": features,
+                    "complexity": features.get("complexity", "SIMPLE"),
+                    "strategy": features.get("strategy", "balanced"),
+                    "alternative_eligible_models": features.get("alternative_eligible_models", []),
+                    "fallback_reason": features.get("fallback_reason"),
                     "latency_ms": row["latency_ms"] or 0,
                     "total_tokens": row["total_tokens"] or 0,
                     "cost_estimate": row["estimated_cost"],

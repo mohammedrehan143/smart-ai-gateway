@@ -1,4 +1,4 @@
-"""Pydantic V2 schemas matching docs/05_API_CONTRACT.md."""
+"""Pydantic V2 schemas matching docs/05_API_CONTRACT.md with advanced agentic extensions."""
 
 from __future__ import annotations
 
@@ -15,8 +15,28 @@ class ChatMessageSchema(BaseModel):
 
 
 class RoutingSchema(BaseModel):
-    policy: Literal["adaptive", "always_cheap", "always_strong"] = "adaptive"
+    policy: Literal[
+        "adaptive",
+        "always_cheap",
+        "always_strong",
+        "cost_optimized",
+        "balanced",
+        "quality_first",
+        "performance_optimized",
+        "manual",
+    ] = "adaptive"
     preference: Optional[str] = "balanced"
+    strategy: Optional[
+        Literal["cost_optimized", "balanced", "quality_first", "performance_optimized", "manual"]
+    ] = None
+    quality_threshold: Optional[float] = None
+    manual_model: Optional[str] = None
+    enable_collaboration: bool = False
+    collaboration_strategy: Optional[Literal["peer_review", "code_verification", "consensus"]] = None
+    enable_bandit: bool = True
+    user_id: Optional[str] = "default_user"
+    project_id: Optional[str] = "default_project"
+    max_cost_limit: Optional[float] = None
 
 
 class ParametersSchema(BaseModel):
@@ -28,9 +48,10 @@ class ChatCompletionRequest(BaseModel):
     messages: List[ChatMessageSchema] = Field(..., min_length=1)
     routing: RoutingSchema = Field(default_factory=RoutingSchema)
     parameters: ParametersSchema = Field(default_factory=ParametersSchema)
+    tools: Optional[List[Dict[str, Any]]] = None
     metadata: Optional[Dict[str, Any]] = None
     stream: bool = False
-
+    user: Optional[str] = None
 
 
 class ChoiceMessage(BaseModel):
@@ -57,9 +78,18 @@ class UsageSchema(BaseModel):
 class RoutingDecisionSchema(BaseModel):
     policy: str
     policy_version: str
-    tier: Literal["cheap", "strong"]
+    tier: str
     reason: str
     fallback_used: bool = False
+    complexity: Optional[str] = None
+    strategy: Optional[str] = None
+    task_category: Optional[str] = None
+    alternative_eligible_models: Optional[List[str]] = None
+    estimated_cost: Optional[float] = None
+    fallback_reason: Optional[str] = None
+    bandit_score: Optional[float] = None
+    agentic_plan: Optional[Dict[str, Any]] = None
+    evaluation: Optional[Dict[str, Any]] = None
 
 
 class ChatCompletionResponse(BaseModel):
@@ -74,6 +104,19 @@ class ChatCompletionResponse(BaseModel):
     latency_ms: int
     trace_id: str
     cached: bool = False
+
+
+class CredentialCreateRequest(BaseModel):
+    provider: str = Field(..., description="Provider name: openai, anthropic, google, groq")
+    api_key: str = Field(..., min_length=5, description="Provider API key")
+    base_url: Optional[str] = Field(None, description="Optional custom base URL")
+
+
+class BudgetSetRequest(BaseModel):
+    project_id: str = Field(default="default_project")
+    max_cost_per_request: Optional[float] = Field(None, ge=0.0)
+    daily_budget: Optional[float] = Field(None, ge=0.0)
+    monthly_budget: Optional[float] = Field(None, ge=0.0)
 
 
 class ErrorDetail(BaseModel):
@@ -93,3 +136,4 @@ class HealthResponse(BaseModel):
     gateway_version: str
     database: Optional[str] = None
     environment: str
+

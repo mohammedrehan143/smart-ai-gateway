@@ -24,8 +24,17 @@ class ChatMessage:
 
 @dataclass
 class RoutingOptions:
-    policy: Literal["adaptive", "always_cheap", "always_strong"] = "adaptive"
+    policy: str = "adaptive"  # adaptive, always_cheap, always_strong, cost_optimized, balanced, quality_first, performance_optimized, manual
     preference: Optional[str] = "balanced"
+    strategy: Optional[str] = None
+    quality_threshold: Optional[float] = None
+    manual_model: Optional[str] = None
+    enable_collaboration: bool = False
+    collaboration_strategy: Optional[str] = None
+    enable_bandit: bool = True
+    user_id: str = "default_user"
+    project_id: str = "default_project"
+    max_cost_limit: Optional[float] = None
 
 
 @dataclass
@@ -45,6 +54,16 @@ class RoutingDecision:
     reason_message: str
     feature_summary: Dict[str, Any] = field(default_factory=dict)
     fallback_used: bool = False
+    complexity: str = "SIMPLE"  # SIMPLE, MODERATE, COMPLEX, EXPERT
+    strategy: str = "balanced"
+    task_category: str = "general_chat"
+    alternative_eligible_models: List[str] = field(default_factory=list)
+    estimated_cost: Optional[float] = None
+    fallback_reason: Optional[str] = None
+    candidate_progression: List[str] = field(default_factory=list)
+    bandit_score: Optional[float] = None
+    agentic_plan: Optional[Dict[str, Any]] = None
+    evaluation: Optional[Dict[str, Any]] = None
 
 
 @dataclass

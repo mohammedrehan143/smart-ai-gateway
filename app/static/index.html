@@ -3,17 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart AI Gateway - Live Chat</title>
+    <title>Smart AI Gateway - Adaptive Agentic AI Platform</title>
     <style>
         :root {
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
+            --bg-color: #0b0f19;
+            --card-bg: #151d30;
+            --card-sub: #1e293b;
             --text-main: #f8fafc;
             --text-sub: #94a3b8;
             --primary: #3b82f6;
             --accent-cheap: #10b981;
             --accent-strong: #8b5cf6;
-            --border: #334155;
+            --accent-collab: #f59e0b;
+            --accent-eval: #ec4899;
+            --border: #22314e;
+            --danger: #ef4444;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -27,23 +31,28 @@
         header {
             background: var(--card-bg);
             border-bottom: 1px solid var(--border);
-            padding: 12px 24px;
+            padding: 10px 20px;
             display: flex;
             align-items: center;
             justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
         }
         .brand { display: flex; align-items: center; gap: 10px; }
-        .brand h1 { font-size: 1.15rem; font-weight: 700; }
-        .controls { display: flex; align-items: center; gap: 12px; }
-        select {
+        .brand h1 { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.02em; }
+        .tagline { font-size: 0.72rem; color: var(--text-sub); }
+        .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        select, button.control-btn {
             background: var(--bg-color);
             color: var(--text-main);
             border: 1px solid var(--border);
             padding: 6px 12px;
             border-radius: 6px;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             cursor: pointer;
+            transition: all 0.2s;
         }
+        button.control-btn:hover { border-color: var(--primary); color: #fff; }
         #chat-container {
             flex: 1;
             overflow-y: auto;
@@ -51,17 +60,17 @@
             display: flex;
             flex-direction: column;
             gap: 16px;
-            max-width: 900px;
+            max-width: 950px;
             width: 100%;
             margin: 0 auto;
         }
         .message {
             display: flex;
             flex-direction: column;
-            max-width: 80%;
-            padding: 12px 16px;
+            max-width: 85%;
+            padding: 14px 18px;
             border-radius: 12px;
-            line-height: 1.5;
+            line-height: 1.55;
             font-size: 0.95rem;
         }
         .user-message {
@@ -75,40 +84,65 @@
             background: var(--card-bg);
             border: 1px solid var(--border);
             border-bottom-left-radius: 2px;
+            width: 100%;
+        }
+        .message-content {
+            white-space: pre-wrap;
+            word-break: break-word;
         }
         .meta-card {
-            margin-top: 8px;
-            padding: 8px 10px;
-            background: rgba(0, 0, 0, 0.25);
-            border-radius: 6px;
-            font-size: 0.78rem;
+            margin-top: 10px;
+            padding: 10px 12px;
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.8rem;
             color: var(--text-sub);
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 6px;
         }
         .meta-badges {
             display: flex;
             gap: 6px;
             flex-wrap: wrap;
+            align-items: center;
         }
         .badge {
-            padding: 2px 6px;
+            padding: 2px 7px;
             border-radius: 4px;
             font-weight: 600;
             text-transform: uppercase;
-            font-size: 0.7rem;
+            font-size: 0.68rem;
         }
-        .badge-cheap { background: rgba(16, 185, 129, 0.2); color: #34d399; }
-        .badge-strong { background: rgba(139, 92, 246, 0.2); color: #a78bfa; }
-        .badge-cached { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+        .badge-cheap { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-strong { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
+        .badge-collab { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .badge-eval { background: rgba(236, 72, 153, 0.15); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.3); }
+        .badge-cached { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
+        .plan-box {
+            margin-top: 6px;
+            padding: 8px 10px;
+            background: rgba(245, 158, 11, 0.08);
+            border-left: 3px solid var(--accent-collab);
+            border-radius: 4px;
+            font-size: 0.76rem;
+        }
+        .eval-box {
+            margin-top: 4px;
+            padding: 6px 10px;
+            background: rgba(236, 72, 153, 0.08);
+            border-left: 3px solid var(--accent-eval);
+            border-radius: 4px;
+            font-size: 0.76rem;
+        }
         footer {
             background: var(--card-bg);
             border-top: 1px solid var(--border);
-            padding: 16px 20px;
+            padding: 14px 20px;
         }
         .input-bar {
-            max-width: 900px;
+            max-width: 950px;
             margin: 0 auto;
             display: flex;
             gap: 10px;
@@ -122,82 +156,200 @@
             border-radius: 8px;
             font-size: 0.95rem;
             outline: none;
+            transition: border-color 0.2s;
         }
         input[type="text"]:focus { border-color: var(--primary); }
-        button {
+        button#send-btn {
             background: var(--primary);
             color: white;
             border: none;
-            padding: 0 20px;
+            padding: 0 24px;
             border-radius: 8px;
             font-weight: 600;
             cursor: pointer;
             transition: opacity 0.2s;
         }
-        button:hover { opacity: 0.9; }
-        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        button#send-btn:hover { opacity: 0.9; }
+        button#send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* Modal / Drawer */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .modal-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            width: 90%;
+            max-width: 520px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .modal-card h2 { font-size: 1.15rem; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .form-group label { font-size: 0.8rem; color: var(--text-sub); }
+        .form-group input, .form-group select {
+            background: var(--bg-color);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 8px 12px;
+            border-radius: 6px;
+            outline: none;
+        }
     </style>
 </head>
 <body>
     <header>
         <div class="brand">
-            <span style="font-size: 1.3rem;">⚡</span>
-            <h1>Smart AI Gateway</h1>
+            <span style="font-size: 1.4rem;">⚡</span>
+            <div>
+                <h1>Smart AI Gateway</h1>
+                <div class="tagline">Adaptive Agentic AI Orchestration & Multi-Model Infrastructure</div>
+            </div>
         </div>
         <div class="controls">
-            <label for="policy-select" style="font-size: 0.85rem; color: var(--text-sub);">Routing Policy:</label>
-            <select id="policy-select">
-                <option value="adaptive" selected>Adaptive (Auto-Route)</option>
-                <option value="always_cheap">Always Cheap</option>
-                <option value="always_strong">Always Strong</option>
+            <select id="strategy-select" title="Routing Strategy & Execution Topology">
+                <option value="adaptive_bandit">Adaptive (Contextual Bandit)</option>
+                <option value="cost_optimized">Cost Optimized</option>
+                <option value="balanced" selected>Balanced (Cost & Quality)</option>
+                <option value="quality_first">Quality First</option>
+                <option value="performance_optimized">Performance Optimized</option>
+                <option value="collab_peer_review">Agentic: Peer Review</option>
+                <option value="collab_code_verification">Agentic: Code Verification</option>
+                <option value="collab_consensus">Agentic: Consensus Synthesis</option>
             </select>
-            <a href="/docs" target="_blank" style="color: var(--text-sub); text-decoration: none; font-size: 0.85rem; margin-left: 8px;">API Docs</a>
+            <button class="control-btn" id="byok-btn">🔑 BYOK Keys</button>
+            <button class="control-btn" id="budget-btn">💰 Budgets</button>
+            <a href="/docs" target="_blank" style="color: var(--text-sub); text-decoration: none; font-size: 0.82rem; margin-left: 6px;">Swagger API</a>
         </div>
     </header>
 
     <div id="chat-container">
         <div class="message gateway-message">
-            Welcome to <strong>Smart AI Gateway</strong>! Ask a general question (routed to cheap tier) or paste Python code/debugging questions (auto-routed to strong tier).
+            <div class="message-content">
+Welcome to <strong>Smart AI Gateway 2.0</strong> — Adaptive Agentic Orchestration Layer.
+
+• <strong>Task Profiling</strong>: Automatically classifies prompts across 9 categories (Coding, Architecture, Math, Research, etc.)
+• <strong>Dynamic Routing</strong>: Multi-factor capability scoring, UCB1 contextual bandits, and circuit breaker health probes.
+• <strong>Agentic Collaboration</strong>: Multi-model peer reviews, AST code verifiers, and consensus synthesis.
+• <strong>Safeguards</strong>: Proactive financial budgets, L1/L2 context-safe semantic caching, and AST/JSON response evaluators.
+            </div>
         </div>
     </div>
 
     <footer>
         <div class="input-bar">
-            <input type="text" id="user-input" placeholder="Type your prompt here..." autocomplete="off">
+            <input type="text" id="user-input" placeholder="Ask a question, paste code to verify, or request architecture design..." autocomplete="off">
             <button id="send-btn">Send</button>
         </div>
     </footer>
+
+    <!-- BYOK Modal -->
+    <div class="modal-overlay" id="byok-modal">
+        <div class="modal-card">
+            <h2>🔑 BYOK Encrypted Credentials</h2>
+            <p style="font-size: 0.8rem; color: var(--text-sub);">Keys are Fernet AES-encrypted at rest and never exposed in logs or traces.</p>
+            <div class="form-group">
+                <label>Provider</label>
+                <select id="byok-provider">
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="google">Google Gemini</option>
+                    <option value="groq">Groq</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label>API Key</label>
+                <input type="password" id="byok-key" placeholder="sk-...">
+            </div>
+            <div id="byok-list" style="font-size: 0.78rem; color: var(--text-sub); max-height: 120px; overflow-y: auto;"></div>
+            <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px;">
+                <button class="control-btn" id="byok-close">Close</button>
+                <button class="control-btn" style="background: var(--primary); color: white;" id="byok-save">Save Encrypted Key</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Budget Modal -->
+    <div class="modal-overlay" id="budget-modal">
+        <div class="modal-card">
+            <h2>💰 Proactive Budget & Cost Limits</h2>
+            <p style="font-size: 0.8rem; color: var(--text-sub);">Requests exceeding financial caps are rejected prior to upstream dispatch.</p>
+            <div class="form-group">
+                <label>Max Cost Per Single Request ($)</label>
+                <input type="number" id="budget-per-req" step="0.001" placeholder="e.g. 0.05">
+            </div>
+            <div class="form-group">
+                <label>Daily Budget Cap ($)</label>
+                <input type="number" id="budget-daily" step="0.10" placeholder="e.g. 5.00">
+            </div>
+            <div id="budget-summary" style="font-size: 0.78rem; color: var(--text-sub); margin-top: 6px;"></div>
+            <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px;">
+                <button class="control-btn" id="budget-close">Close</button>
+                <button class="control-btn" style="background: var(--primary); color: white;" id="budget-save">Save Budget</button>
+            </div>
+        </div>
+    </div>
 
     <script>
         const chatContainer = document.getElementById('chat-container');
         const userInput = document.getElementById('user-input');
         const sendBtn = document.getElementById('send-btn');
-        const policySelect = document.getElementById('policy-select');
+        const strategySelect = document.getElementById('strategy-select');
 
         let messageHistory = [];
 
-        function appendMessage(role, text, metadata = null) {
+        function appendMessage(role, text, meta = null) {
             const msgDiv = document.createElement('div');
             msgDiv.className = `message ${role}-message`;
-            msgDiv.innerText = text;
+            
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'message-content';
+            contentDiv.innerText = text;
+            msgDiv.appendChild(contentDiv);
 
-            if (metadata) {
+            if (meta) {
                 const metaCard = document.createElement('div');
                 metaCard.className = 'meta-card';
 
-                const tierClass = metadata.tier === 'strong' ? 'badge-strong' : 'badge-cheap';
-                const cachedHtml = metadata.cached ? '<span class="badge badge-cached">Cached</span>' : '';
-                const costHtml = metadata.cost !== null ? `$${metadata.cost.toFixed(6)}` : 'N/A';
+                const tierClass = meta.tier === 'strong' ? 'badge-strong' : 'badge-cheap';
+                const cachedHtml = meta.cached ? '<span class="badge badge-cached">Cached</span>' : '';
+                const costHtml = meta.cost !== null ? `$${meta.cost.toFixed(6)}` : 'N/A';
+                const categoryBadge = meta.category ? `<span class="badge" style="background:#1e293b; color:#cbd5e1;">${meta.category}</span>` : '';
+                const complexityBadge = meta.complexity ? `<span class="badge" style="background:#312e81; color:#c7d2fe;">${meta.complexity}</span>` : '';
+
+                let planHtml = '';
+                if (meta.plan && meta.plan.total_steps > 1) {
+                    const stepLines = (meta.plan.steps || []).map(s => `Step ${s.step_number}: ${s.title} (${s.assigned_model}) [${s.status}]`).join('<br>');
+                    planHtml = `<div class="plan-box"><strong>Agentic Plan (${meta.plan.mode}):</strong><br>${stepLines}</div>`;
+                }
+
+                let evalHtml = '';
+                if (meta.evaluation) {
+                    evalHtml = `<div class="eval-box"><strong>Inline Quality Evaluation:</strong> Score: ${(meta.evaluation.overall_score * 100).toFixed(0)}% | Code Valid: ${meta.evaluation.code_correctness >= 0.8 ? 'Yes' : 'N/A'} | Relevance: ${(meta.evaluation.relevance * 100).toFixed(0)}%</div>`;
+                }
 
                 metaCard.innerHTML = `
                     <div class="meta-badges">
-                        <span class="badge ${tierClass}">${metadata.tier} (${metadata.model})</span>
+                        <span class="badge ${tierClass}">${meta.tier} (${meta.model})</span>
+                        ${categoryBadge}
+                        ${complexityBadge}
                         ${cachedHtml}
-                        <span>⚡ ${metadata.latency_ms}ms</span>
-                        <span>📊 ${metadata.tokens} tokens</span>
+                        <span>⚡ ${meta.latency_ms}ms</span>
+                        <span>📊 ${meta.tokens} tokens</span>
                         <span>💰 ${costHtml}</span>
                     </div>
-                    <div><strong>Reason:</strong> ${metadata.reason}</div>
+                    <div><strong>Routing Reason:</strong> ${meta.reason}</div>
+                    ${planHtml}
+                    ${evalHtml}
                 `;
                 msgDiv.appendChild(metaCard);
             }
@@ -217,16 +369,28 @@
 
             messageHistory.push({ role: 'user', content: text });
 
+            const stratVal = strategySelect.value;
+            let routingPayload = { policy: "adaptive" };
+
+            if (stratVal.startsWith("collab_")) {
+                routingPayload.enable_collaboration = true;
+                routingPayload.collaboration_strategy = stratVal.replace("collab_", "");
+            } else if (stratVal === "adaptive_bandit") {
+                routingPayload.enable_bandit = true;
+            } else {
+                routingPayload.strategy = stratVal;
+            }
+
             const payload = {
                 messages: messageHistory,
-                routing: { policy: policySelect.value },
+                routing: routingPayload,
                 parameters: { temperature: 0.2, max_output_tokens: 1024 }
             };
 
             try {
                 const res = await fetch('/v1/chat', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'X-User-ID': 'default_user' },
                     body: JSON.stringify(payload)
                 });
 
@@ -239,10 +403,14 @@
                         model: data.model,
                         tier: data.routing.tier,
                         reason: data.routing.reason,
+                        complexity: data.routing.complexity,
+                        category: data.routing.task_category,
                         latency_ms: data.latency_ms,
                         tokens: data.usage.total_tokens,
                         cost: data.usage.cost_estimate,
-                        cached: data.cached
+                        cached: data.cached,
+                        plan: data.routing.agentic_plan,
+                        evaluation: data.routing.evaluation,
                     });
                 } else {
                     const err = await res.json();
@@ -261,6 +429,71 @@
         userInput.addEventListener('keydown', (e) => {
             if (e.key === 'Enter') sendMessage();
         });
+
+        // Modals management
+        const byokModal = document.getElementById('byok-modal');
+        const byokBtn = document.getElementById('byok-btn');
+        const byokClose = document.getElementById('byok-close');
+        const byokSave = document.getElementById('byok-save');
+        const byokList = document.getElementById('byok-list');
+
+        async function loadBYOKList() {
+            try {
+                const res = await fetch('/v1/credentials', { headers: { 'X-User-ID': 'default_user' } });
+                if (res.ok) {
+                    const items = await res.json();
+                    if (items.length === 0) {
+                        byokList.innerHTML = '<em>No custom credentials registered yet. Using gateway fallback.</em>';
+                    } else {
+                        byokList.innerHTML = items.map(i => `<div>• <strong>${i.provider.toUpperCase()}</strong>: <code>${i.masked_key}</code></div>`).join('');
+                    }
+                }
+            } catch (e) {}
+        }
+
+        byokBtn.onclick = () => { byokModal.style.display = 'flex'; loadBYOKList(); };
+        byokClose.onclick = () => { byokModal.style.display = 'none'; };
+        byokSave.onclick = async () => {
+            const provider = document.getElementById('byok-provider').value;
+            const api_key = document.getElementById('byok-key').value.trim();
+            if (!api_key) return;
+            await fetch('/v1/credentials', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-User-ID': 'default_user' },
+                body: JSON.stringify({ provider, api_key })
+            });
+            document.getElementById('byok-key').value = '';
+            loadBYOKList();
+        };
+
+        const budgetModal = document.getElementById('budget-modal');
+        const budgetBtn = document.getElementById('budget-btn');
+        const budgetClose = document.getElementById('budget-close');
+        const budgetSave = document.getElementById('budget-save');
+        const budgetSummary = document.getElementById('budget-summary');
+
+        async function loadBudgetStatus() {
+            try {
+                const res = await fetch('/v1/budgets/default_project', { headers: { 'X-User-ID': 'default_user' } });
+                if (res.ok) {
+                    const b = await res.json();
+                    budgetSummary.innerHTML = `Today's spend: <strong>$${b.today_spend}</strong> | Month: <strong>$${b.month_spend}</strong><br>Cap/req: ${b.max_cost_per_request ? '$'+b.max_cost_per_request : 'None'} | Daily cap: ${b.daily_budget ? '$'+b.daily_budget : 'None'}`;
+                }
+            } catch (e) {}
+        }
+
+        budgetBtn.onclick = () => { budgetModal.style.display = 'flex'; loadBudgetStatus(); };
+        budgetClose.onclick = () => { budgetModal.style.display = 'none'; };
+        budgetSave.onclick = async () => {
+            const perReq = parseFloat(document.getElementById('budget-per-req').value) || null;
+            const daily = parseFloat(document.getElementById('budget-daily').value) || null;
+            await fetch('/v1/budgets', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-User-ID': 'default_user' },
+                body: JSON.stringify({ project_id: 'default_project', max_cost_per_request: perReq, daily_budget: daily })
+            });
+            loadBudgetStatus();
+        };
     </script>
 </body>
 </html>

@@ -1,10 +1,11 @@
-"""Routing decision inspection endpoint."""
+"""Routing decision inspection and adaptive bandit telemetry endpoints."""
 
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Query, status
 from app.api.deps import get_repository, verify_gateway_auth
+from app.domain.bandit_router import default_bandit_router
 from app.domain.interfaces import TraceRepository
 
 router = APIRouter(prefix="/v1/routing", tags=["Routing"])
@@ -30,3 +31,31 @@ async def get_routing_decisions(
         "decisions": decisions,
         "count": len(decisions),
     }
+
+
+@router.get(
+    "/bandit-stats",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(verify_gateway_auth)],
+)
+async def get_bandit_statistics() -> Dict[str, Any]:
+    """Returns contextual bandit learning statistics across task categories and models."""
+    stats = default_bandit_router.get_statistics()
+    return {
+        "arms": stats,
+        "total_arms": len(stats),
+        "exploration_rate": default_bandit_router.epsilon,
+        "enabled": default_bandit_router.enabled,
+    }
+
+
+@router.post(
+    "/bandit-reset",
+    status_code=status.HTTP_200_OK,
+    dependencies=[Depends(verify_gateway_auth)],
+)
+async def reset_bandit_statistics() -> Dict[str, Any]:
+    """Resets all contextual bandit learning state back to baseline priors."""
+    default_bandit_router.reset()
+    return {"status": "reset", "message": "Bandit statistics reset to default priors."}
+

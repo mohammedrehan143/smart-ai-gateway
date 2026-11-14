@@ -87,6 +87,10 @@ class RoutingDecisionRecord(BaseModel):
     reason_code: Optional[str] = None
     reason: str
     features: Dict[str, Any] = Field(default_factory=dict)
+    complexity: Optional[str] = None
+    strategy: Optional[str] = None
+    alternative_eligible_models: Optional[List[str]] = None
+    fallback_reason: Optional[str] = None
     latency_ms: int = 0
     total_tokens: int = 0
     cost_estimate: Optional[float] = None
