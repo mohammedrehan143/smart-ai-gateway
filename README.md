@@ -1,97 +1,227 @@
 # Smart AI Gateway
 
-**Enterprise-oriented reference blueprint for LLMOps, agent evaluation, and policy-based model routing.**
+**Enterprise-grade AI Infrastructure Service for LLMOps, Deterministic Auto-Routing, and Evidence-Based Agent Evaluation.**
 
-> This repository is a specification and build-guidance pack, not a prebuilt application. It tells an implementation agent and the developer what to build, why it is built that way, how components interact, and how the result will be verified.
+[![CI Pipeline](https://github.com/gateai/smart-ai-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/gateai/smart-ai-gateway/actions/workflows/ci.yml)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## Product in one sentence
+---
 
-A provider-neutral AI gateway that accepts application requests, routes each request to an appropriate hosted model, handles provider failures, records operational and cost telemetry, and evaluates a tool-using agent against a repeatable benchmark.
+## 1. Product Overview
 
-## The three integrated capabilities
+Smart AI Gateway centralizes model access, operational observability, reliability engineering, and evaluation across hosted LLM providers behind a unified endpoint (`POST /v1/chat`).
 
-| Capability | Product responsibility | Evidence that it works |
-|---|---|---|
-| **Auto-routing** | Select an approved model based on request characteristics and an explicit routing policy. | Route decision, decision reason, cost, latency, and quality comparison against fixed-model baselines. |
-| **LLMOps** | Record traces, usage, latency, errors, retries, fallbacks, cache behaviour, and estimated spend. | Queryable request records and operational metrics with no secrets or raw sensitive content leaked. |
-| **Agent evaluations** | Run a small tool-using agent through a versioned task set and score the answer, tool use, and execution trace. | Reproducible evaluation runs comparing always-cheap, always-strong, and adaptive-router policies. |
+### Core Capabilities
 
-## How a request moves through the system
+1. **Deterministic Auto-Routing:** Rule-based complexity feature extraction (code syntax, debugging keywords, multi-step patterns, token thresholds) selects optimal model tiers (`cheap` vs `strong`) with explainable reason codes.
+2. **LLMOps & Telemetry:** Full per-request trace persistence to SQLite (`gateway_requests`, `provider_attempts`, `routing_decisions`, `usage_records`), calculating token costs against versioned rate cards with zero fabrication.
+3. **Reliability & Cache:** Bounded exponential backoff with jitter for transient 429/5xx errors, automatic model fallback, deadline tracking, and in-memory TTL response cache for deterministic queries.
+4. **Agent Evaluations:** A runtime benchmark agent operating deterministic tools (`calculator` via safe AST, `lookup` via controlled fixtures) scored across final answer, tool selection, and trajectory against a versioned 21-task benchmark.
+
+---
+
+## 2. Request Lifecycle Architecture
 
 ```mermaid
 flowchart TD
-    A[Client application] --> B[FastAPI gateway]
-    B --> C[Validate and normalize]
-    C --> D{Cache hit?}
-    D -- Yes --> E[Return cached result + cache trace]
-    D -- No --> F[Deterministic routing policy]
-    F --> G[Provider adapter]
-    G --> H{Successful response?}
-    H -- No --> I[Retry policy / fallback]
-    I --> G
-    H -- Yes --> J[Normalize response + usage]
-    J --> K[Persist trace and usage]
-    K --> L[Return response]
-    M[Evaluation runner] --> B
-    M --> N[Versioned task set + scorer]
-    N --> O[Evaluation report]
+    A[Client Application] -->|POST /v1/chat| B[FastAPI Gateway]
+    B --> C[Validate & Correlate Trace ID]
+    C --> D{Cache Eligible & Hit?}
+    D -- Yes --> E[Return Cached Response + Provenance]
+    D -- No --> F[Deterministic Feature Extractor]
+    F --> G[Routing Engine: Adaptive / Forced]
+    G --> H[Primary Provider Adapter: Mock / OpenAI]
+    H --> I{Attempt Status}
+    I -- Success --> J[Normalize Response & Compute Cost]
+    I -- Transient Failure --> K{Retry Budget / Deadline?}
+    K -- Yes --> L[Backoff & Jitter Delay]
+    L --> H
+    K -- No --> M[Execute Fallback Model]
+    M --> J
+    J --> N[Persist Trace, Attempts & Usage]
+    N --> O[Return Normalized Envelope]
 ```
 
-## Source-brief alignment
+---
 
-The original project brief calls for one gateway, one `POST /v1/chat` request path, hosted OpenAI-compatible model APIs, Python/FastAPI/`httpx`, SQLite first and PostgreSQL later, in-memory cache first and Redis later, a small agent with 2-3 tools, a 20-50 task exam, and a comparison of always-cheap, always-strong, and router policies. This pack preserves those requirements. Additional sections define professional engineering practices around security, testability, operations, and maintainability; they do not change the product into a chatbot or model-training project.
+## 3. Quickstart & Installation
 
-## Recommended technology choices
+### Local Setup with Virtualenv
 
-| Layer | Initial choice | Upgrade path |
-|---|---|---|
-| API | Python, FastAPI, async endpoints | Keep unless measured need requires a change |
-| HTTP | `httpx` async client | Keep; isolate behind provider adapters |
-| Model access | Hosted provider API with OpenAI-compatible interface | Add providers through adapter contract |
-| Persistence | SQLite for local development and early demo | PostgreSQL for shared or deployed environment |
-| Cache | In-memory, bounded TTL cache | Redis when multi-process or shared cache is required |
-| Evaluation | Python runner + versioned JSONL task set | Add scheduled evaluation and CI quality gates |
-| Packaging | Docker | Same image can be deployed to a cloud runtime |
-| CI | GitHub Actions | Add deployment promotion after tests and checks pass |
+```bash
+# 1. Clone repository and navigate
+cd d:\agy\gateai\smart-ai-gateway
 
-The project does not require a GPU. Do not host or train foundation models locally. Your Intel i5 / 8 GB RAM machine is sufficient for the gateway, tests, mocked providers, and small evaluation runs; use hosted model APIs for inference.
+# 2. Create and activate virtual environment
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1   # Windows PowerShell
+# source .venv/bin/activate    # Linux/macOS
 
-## Read in this order
+# 3. Install dependencies in editable mode
+pip install -r requirements-dev.txt
+pip install -e .
 
-1. [`PROJECT_CHARTER.md`](PROJECT_CHARTER.md) — objective, success definition, boundaries.
-2. [`SCOPE_AND_NON_GOALS.md`](SCOPE_AND_NON_GOALS.md) — what to build now and what not to build.
-3. [`docs/01_PRODUCT_REQUIREMENTS.md`](docs/01_PRODUCT_REQUIREMENTS.md) — requirements and actors.
-4. [`docs/02_SYSTEM_ARCHITECTURE.md`](docs/02_SYSTEM_ARCHITECTURE.md) and [`docs/03_COMPONENT_DESIGN.md`](docs/03_COMPONENT_DESIGN.md) — design and component ownership.
-5. [`docs/05_API_CONTRACT.md`](docs/05_API_CONTRACT.md), [`docs/06_ROUTING_POLICY.md`](docs/06_ROUTING_POLICY.md), and [`docs/10_EVALUATION_FRAMEWORK.md`](docs/10_EVALUATION_FRAMEWORK.md) — core contracts.
-6. [`agents/README.md`](agents/README.md) and [`prompts/MASTER_BUILD_PROMPT.md`](prompts/MASTER_BUILD_PROMPT.md) — how to use coding agents safely.
-7. [`docs/22_IMPLEMENTATION_ROADMAP.md`](docs/22_IMPLEMENTATION_ROADMAP.md) — phased delivery plan.
+# 4. Copy environment template
+cp .env.example .env
 
-## Repository map
+# 5. Start development gateway
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Docker Setup
+
+```bash
+# Build and run container
+docker-compose up --build -d
+
+# Verify container health
+curl http://localhost:8000/health/live
+```
+
+---
+
+## 4. Master Orchestrator Agent
+
+The project includes an executable **Master Orchestrator Agent** (`scripts/master_orchestrator.py`) that governs phase gating, contract invariants, and test verification across all 6 phases:
+
+```bash
+# View current phase progress and verification status
+python scripts/master_orchestrator.py status
+
+# Run automated verification for a specific phase (1-6)
+python scripts/master_orchestrator.py verify --phase 1
+
+# Execute the complete sequential verification pipeline across all 6 phases
+python scripts/master_orchestrator.py run-all
+```
+
+---
+
+## 5. API Reference & Verification Examples
+
+### Health Checks
+
+```bash
+# Liveness probe
+curl -X GET http://localhost:8000/health/live
+
+# Readiness probe
+curl -X GET http://localhost:8000/health/ready
+```
+
+### Chat Completion (`POST /v1/chat`)
+
+```bash
+curl -X POST http://localhost:8000/v1/chat \
+  -H "Content-Type: application/json" \
+  -H "X-Request-ID: demo-client-001" \
+  -d '{
+    "messages": [
+      {"role": "system", "content": "You are a concise engineering assistant."},
+      {"role": "user", "content": "Review this implementation:\n```python\ndef run(x): return x * 2\n```"}
+    ],
+    "routing": {
+      "policy": "adaptive",
+      "preference": "balanced"
+    },
+    "parameters": {
+      "temperature": 0.0,
+      "max_output_tokens": 512
+    }
+  }'
+```
+
+#### Example Normalized Response
+
+```json
+{
+  "id": "req_019a82f1b_a1c2d3e4f501",
+  "object": "gateway.completion",
+  "created": 1794050000,
+  "model": "mock-strong",
+  "provider": "mock",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Mock completion response for: Review this implementation...",
+        "tool_calls": null
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "input_tokens": 28,
+    "output_tokens": 12,
+    "total_tokens": 40,
+    "cost_estimate": 0.00019,
+    "currency": "USD",
+    "cost_status": "calculated"
+  },
+  "routing": {
+    "policy": "adaptive",
+    "policy_version": "1.0.0",
+    "tier": "strong",
+    "reason": "Request contains source code or debugging diagnostics",
+    "fallback_used": false
+  },
+  "latency_ms": 32,
+  "trace_id": "tr_019a82f1b_99b8c7d6e502",
+  "cached": false
+}
+```
+
+---
+
+## 6. Empirical Benchmark Results
+
+Measured across 21 tasks in `evaluation_dataset/benchmark_tasks_v1.json` evaluating always-cheap, always-strong, and adaptive routing:
+
+| Policy | Pass Rate | Mean Score | Total Cost ($) | Avg Cost/Task ($) | Mean Latency (ms) | Fallbacks |
+|---|---|---|---|---|---|---|
+| `always_cheap` | **57.1%** (12/21) | 0.764 | $0.000303 | $0.000014 | 55.7ms | 0 |
+| `always_strong` | **57.1%** (12/21) | 0.764 | $0.005099 | $0.000243 | 39.2ms | 0 |
+| **`adaptive`** | **57.1%** (12/21) | 0.764 | **$0.001913** | **$0.000091** | **34.8ms** | 0 |
+
+> **Key Finding:** The adaptive routing policy achieved **62.5% cost reduction** compared to always-strong while maintaining matching task pass rates.
+
+To regenerate benchmark data:
+```bash
+python scripts/run_benchmark.py
+```
+
+---
+
+## 7. Automated Test Suite
+
+```bash
+# Run all 48 unit and integration tests
+pytest -v
+
+# Run linting with Ruff
+ruff check app/ tests/
+```
+
+---
+
+## 8. Repository Layout
 
 ```text
-smart-ai-gateway-blueprint/
-├── README.md
-├── PROJECT_CHARTER.md
-├── SCOPE_AND_NON_GOALS.md
-├── IMPLEMENTATION_GUIDE.md
-├── CONTRIBUTING.md
-├── agents/
-│   ├── runtime/                 # The benchmarked tool-using agent
-│   └── development/             # Optional coding/review agent role specs
-├── docs/                        # Product, architecture, contracts, operations
-├── prompts/                     # Reusable prompts for implementation and review
-└── reference/
-    └── original_blueprint/      # Exact 22-file original upload, retained for reference
+smart-ai-gateway/
+├── app/
+│   ├── api/                 # FastAPI routes, schemas, and dependencies
+│   ├── core/                # Settings, rate cards, cost calculations, logging, errors
+│   ├── domain/              # Entities, interfaces, router, retry, cache logic
+│   ├── evaluation/          # Benchmark agent, tools, dataset, scorers, runner, reports
+│   ├── providers/           # Base adapter, Mock adapter, OpenAI-compatible adapter
+│   ├── repositories/        # Async SQLite trace and telemetry persistence
+│   └── services/            # Request orchestrator and cache service
+├── evaluation_dataset/      # Versioned benchmark tasks (JSON)
+├── scripts/                 # Master Orchestrator and benchmark CLI runner
+├── tests/                   # 48 Unit and integration test suites
+├── Dockerfile               # Production multi-stage Docker build
+├── docker-compose.yml       # Local container topology
+└── .github/workflows/ci.yml # Continuous Integration pipeline
 ```
-
-## How the merged documentation is organized
-
-The numbered documents in the root `docs/` folder, the root `agents/` specifications, and the root `prompts/` folder are the **current source of truth** for implementation. The original uploaded blueprint is preserved unchanged under `reference/original_blueprint/` for traceability and to avoid losing any earlier material. Do not follow both versions as competing specifications; when wording differs, follow the enterprise documents at the repository root.
-
-## Important design rule
-
-The router is **deterministic Python policy logic**, not an LLM agent. A language model may be used in a future experiment to classify task complexity, but it must not silently replace the baseline policy. The benchmark must first prove the value of the deterministic router.
-
-## Definition of done
-
-The project is not complete merely because it returns model responses. It is complete when the gateway, routing, reliability, telemetry, agent benchmark, repeatable comparison, tests, documentation, and deployable packaging all work together. See [`docs/21_ACCEPTANCE_CRITERIA.md`](docs/21_ACCEPTANCE_CRITERIA.md).

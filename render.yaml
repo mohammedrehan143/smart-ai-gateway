@@ -1,0 +1,26 @@
+services:
+  - type: web
+    name: smart-ai-gateway
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt && pip install ."
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /health/live
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.7
+      - key: APP_ENV
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: CHEAP_MODEL_ALIAS
+        value: mock-cheap
+      - key: STRONG_MODEL_ALIAS
+        value: mock-strong
+      - key: FALLBACK_MODEL_ALIAS
+        value: mock-strong
+      - key: GATEWAY_API_KEY
+        generateValue: true
+      - key: PROVIDER_API_KEY
+        sync: false

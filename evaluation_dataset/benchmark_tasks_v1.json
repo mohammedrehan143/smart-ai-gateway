@@ -1,0 +1,237 @@
+{
+  "version": "1.0.0",
+  "created_at": "2026-11-14T00:00:00Z",
+  "tasks": [
+    {
+      "id": "task_001",
+      "category": "direct",
+      "prompt": "What is the primary function of an AI API gateway?",
+      "required_tools": [],
+      "forbidden_tools": ["calculator", "lookup"],
+      "expected_answer": "routing, observability, rate limiting, and provider abstraction",
+      "expected_facts": ["routing", "gateway"],
+      "max_steps": 1,
+      "weights": {"answer": 0.7, "tool_selection": 0.2, "trajectory": 0.1}
+    },
+    {
+      "id": "task_002",
+      "category": "direct",
+      "prompt": "Explain the difference between latency and throughput in network services.",
+      "required_tools": [],
+      "forbidden_tools": ["calculator", "lookup"],
+      "expected_answer": "Latency is round-trip time; throughput is rate of processed requests.",
+      "expected_facts": ["latency", "throughput"],
+      "max_steps": 1,
+      "weights": {"answer": 0.7, "tool_selection": 0.2, "trajectory": 0.1}
+    },
+    {
+      "id": "task_003",
+      "category": "direct",
+      "prompt": "State the standard HTTP status code for an unauthorized request.",
+      "required_tools": [],
+      "forbidden_tools": ["calculator", "lookup"],
+      "expected_answer": "401",
+      "expected_facts": ["401"],
+      "max_steps": 1,
+      "weights": {"answer": 0.8, "tool_selection": 0.1, "trajectory": 0.1}
+    },
+    {
+      "id": "task_004",
+      "category": "calculation",
+      "prompt": "Calculate the total tokens for 1420 input tokens plus 380 output tokens.",
+      "required_tools": ["calculator"],
+      "forbidden_tools": ["lookup"],
+      "expected_answer": 1800,
+      "expected_facts": ["1800"],
+      "max_steps": 2,
+      "weights": {"answer": 0.5, "tool_selection": 0.3, "trajectory": 0.2}
+    },
+    {
+      "id": "task_005",
+      "category": "calculation",
+      "prompt": "Calculate 250000 * 0.15 / 1000000 to find the estimated input cost in dollars.",
+      "required_tools": ["calculator"],
+      "forbidden_tools": ["lookup"],
+      "expected_answer": 0.0375,
+      "expected_facts": ["0.0375"],
+      "max_steps": 2,
+      "weights": {"answer": 0.5, "tool_selection": 0.3, "trajectory": 0.2}
+    },
+    {
+      "id": "task_006",
+      "category": "calculation",
+      "prompt": "Calculate 48 * 125 using the calculator tool.",
+      "required_tools": ["calculator"],
+      "forbidden_tools": ["lookup"],
+      "expected_answer": 6000,
+      "expected_facts": ["6000"],
+      "max_steps": 2,
+      "weights": {"answer": 0.5, "tool_selection": 0.3, "trajectory": 0.2}
+    },
+    {
+      "id": "task_007",
+      "category": "calculation",
+      "prompt": "Calculate (850 - 250) / 4 using arithmetic.",
+      "required_tools": ["calculator"],
+      "forbidden_tools": ["lookup"],
+      "expected_answer": 150,
+      "expected_facts": ["150"],
+      "max_steps": 2,
+      "weights": {"answer": 0.5, "tool_selection": 0.3, "trajectory": 0.2}
+    },
+    {
+      "id": "task_008",
+      "category": "lookup",
+      "prompt": "Lookup account:101 and report the organization name and account status.",
+      "required_tools": ["lookup"],
+      "forbidden_tools": ["calculator"],
+      "expected_answer": "Acme Corp is active",
+      "expected_facts": ["Acme Corp", "active"],
+      "max_steps": 2,
+      "weights": {"answer": 0.5, "tool_selection": 0.3, "trajectory": 0.2}
+    },
+    {
+      "id": "task_009",
+      "category": "lookup",
+      "prompt": "Lookup account:102 and return its tier and monthly token quota.",
+      "required_tools": ["lookup"],
+      "forbidden_tools": ["calculator"],
+      "expected_answer": "standard tier with 50000 quota",
+      "expected_facts": ["standard", "50000"],
+      "max_steps": 2,
+      "weights": {"answer": 0.5, "tool_selection": 0.3, "trajectory": 0.2}
+    },
+    {
+      "id": "task_009b",
+      "category": "lookup",
+      "prompt": "Lookup service:gateway and return the default listening port and maintainer.",
+      "required_tools": ["lookup"],
+      "forbidden_tools": ["calculator"],
+      "expected_answer": "port 8000 maintained by core-infra",
+      "expected_facts": ["8000", "core-infra"],
+      "max_steps": 2,
+      "weights": {"answer": 0.5, "tool_selection": 0.3, "trajectory": 0.2}
+    },
+    {
+      "id": "task_010",
+      "category": "lookup",
+      "prompt": "Lookup pricing:mock-cheap and report input cost per 1M tokens.",
+      "required_tools": ["lookup"],
+      "forbidden_tools": ["calculator"],
+      "expected_answer": "0.15",
+      "expected_facts": ["0.15"],
+      "max_steps": 2,
+      "weights": {"answer": 0.5, "tool_selection": 0.3, "trajectory": 0.2}
+    },
+    {
+      "id": "task_011",
+      "category": "multistep",
+      "prompt": "Step 1: lookup server:us-east-1 to find capacity_units. Step 2: calculate capacity_units * 2.",
+      "required_tools": ["lookup", "calculator"],
+      "forbidden_tools": [],
+      "expected_answer": 900,
+      "expected_facts": ["900"],
+      "max_steps": 4,
+      "weights": {"answer": 0.4, "tool_selection": 0.3, "trajectory": 0.3}
+    },
+    {
+      "id": "task_012",
+      "category": "multistep",
+      "prompt": "Step 1: lookup pricing:mock-strong to find output_per_1m. Step 2: calculate 50000 * output_per_1m / 1000000.",
+      "required_tools": ["lookup", "calculator"],
+      "forbidden_tools": [],
+      "expected_answer": 0.5,
+      "expected_facts": ["0.5"],
+      "max_steps": 4,
+      "weights": {"answer": 0.4, "tool_selection": 0.3, "trajectory": 0.3}
+    },
+    {
+      "id": "task_013",
+      "category": "code_debug",
+      "prompt": "Debug this function and identify why it fails on empty list:\n```python\ndef get_first(items):\n    return items[0]\n```",
+      "required_tools": [],
+      "forbidden_tools": ["calculator", "lookup"],
+      "expected_answer": "IndexError on empty list because index 0 does not exist",
+      "expected_facts": ["IndexError", "empty"],
+      "max_steps": 1,
+      "weights": {"answer": 0.7, "tool_selection": 0.2, "trajectory": 0.1}
+    },
+    {
+      "id": "task_014",
+      "category": "code_debug",
+      "prompt": "Review this SQL statement and suggest index optimization:\n```sql\nSELECT * FROM gateway_requests WHERE trace_id = 'tr_123';\n```",
+      "required_tools": [],
+      "forbidden_tools": ["calculator", "lookup"],
+      "expected_answer": "Add an index on trace_id column",
+      "expected_facts": ["index", "trace_id"],
+      "max_steps": 1,
+      "weights": {"answer": 0.7, "tool_selection": 0.2, "trajectory": 0.1}
+    },
+    {
+      "id": "task_015",
+      "category": "direct",
+      "prompt": "What does TTL stand for in cache architectures?",
+      "required_tools": [],
+      "forbidden_tools": ["calculator", "lookup"],
+      "expected_answer": "Time To Live",
+      "expected_facts": ["Time To Live"],
+      "max_steps": 1,
+      "weights": {"answer": 0.8, "tool_selection": 0.1, "trajectory": 0.1}
+    },
+    {
+      "id": "task_016",
+      "category": "calculation",
+      "prompt": "Calculate 1024 * 1024 to find the total bytes in one mebibyte.",
+      "required_tools": ["calculator"],
+      "forbidden_tools": ["lookup"],
+      "expected_answer": 1048576,
+      "expected_facts": ["1048576"],
+      "max_steps": 2,
+      "weights": {"answer": 0.5, "tool_selection": 0.3, "trajectory": 0.2}
+    },
+    {
+      "id": "task_017",
+      "category": "lookup",
+      "prompt": "Lookup server:eu-west-1 and report its utilization percentage.",
+      "required_tools": ["lookup"],
+      "forbidden_tools": ["calculator"],
+      "expected_answer": "88.5",
+      "expected_facts": ["88.5"],
+      "max_steps": 2,
+      "weights": {"answer": 0.5, "tool_selection": 0.3, "trajectory": 0.2}
+    },
+    {
+      "id": "task_018",
+      "category": "direct",
+      "prompt": "Why should API keys never be stored in plain text version control?",
+      "required_tools": [],
+      "forbidden_tools": ["calculator", "lookup"],
+      "expected_answer": "Security exposure, credential theft, and unauthorized access.",
+      "expected_facts": ["security", "exposure"],
+      "max_steps": 1,
+      "weights": {"answer": 0.7, "tool_selection": 0.2, "trajectory": 0.1}
+    },
+    {
+      "id": "task_019",
+      "category": "calculation",
+      "prompt": "Calculate 3000 / 60 to find requests per second.",
+      "required_tools": ["calculator"],
+      "forbidden_tools": ["lookup"],
+      "expected_answer": 50,
+      "expected_facts": ["50"],
+      "max_steps": 2,
+      "weights": {"answer": 0.5, "tool_selection": 0.3, "trajectory": 0.2}
+    },
+    {
+      "id": "task_020",
+      "category": "code_debug",
+      "prompt": "Analyze this Python error traceback:\nZeroDivisionError: division by zero in compute_ratio() line 4\nHow should it be guarded?",
+      "required_tools": [],
+      "forbidden_tools": ["calculator", "lookup"],
+      "expected_answer": "Check denominator != 0 before dividing or wrap in try/except",
+      "expected_facts": ["zero", "denominator"],
+      "max_steps": 1,
+      "weights": {"answer": 0.7, "tool_selection": 0.2, "trajectory": 0.1}
+    }
+  ]
+}

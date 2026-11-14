@@ -1,0 +1,422 @@
+"""Chat Orchestration Service coordinating routing, caching, retries, fallback, and persistence."""
+
+from __future__ import annotations
+
+import asyncio
+import hashlib
+import time
+from typing import Optional
+from app.api.schemas import (
+    ChatChoice,
+    ChatCompletionRequest,
+    ChatCompletionResponse,
+    ChoiceMessage,
+    RoutingDecisionSchema,
+    UsageSchema,
+)
+from app.core.config import settings
+from app.core.cost import CostCalculator, default_cost_calculator
+from app.core.errors import (
+    GatewayError,
+    ProviderUnavailableError,
+)
+from app.core.logging import (
+    correlation_request_id,
+    correlation_trace_id,
+    get_logger,
+)
+from app.core.metrics import default_metrics
+from app.domain.cache import compute_cache_key, is_cache_eligible
+from app.domain.entities import (
+    ChatMessage,
+    GatewayRequestRecord,
+    GenerationParameters,
+    NormalizedCompletion,
+    ProviderAttemptRecord,
+    RoutingDecision,
+    RoutingOptions,
+    UsageRecord,
+    generate_id,
+)
+from app.domain.interfaces import CacheService, ProviderAdapter, TraceRepository
+from app.domain.retry import DeadlineTracker, calculate_backoff, is_retryable_error
+from app.domain.router import DeterministicRouter, default_router
+from app.providers.mock import MockProviderAdapter
+from app.services.cache_service import default_cache_service
+
+logger = get_logger("orchestrator")
+
+
+class ChatOrchestrator:
+    """Coordinates the chat completion pipeline across components."""
+
+    def __init__(
+        self,
+        repository: TraceRepository,
+        default_adapter: Optional[ProviderAdapter] = None,
+        cost_calculator: Optional[CostCalculator] = None,
+        cache_service: Optional[CacheService] = None,
+        router: Optional[DeterministicRouter] = None,
+    ):
+        self.repository = repository
+        self.default_adapter = default_adapter or MockProviderAdapter()
+        self.cost_calculator = cost_calculator or default_cost_calculator
+        self.cache_service = cache_service or default_cache_service
+        self.router = router or default_router
+
+    async def execute_chat(
+        self,
+        request: ChatCompletionRequest,
+        client_request_id: Optional[str] = None,
+        adapter_override: Optional[ProviderAdapter] = None,
+    ) -> ChatCompletionResponse:
+        start_time = time.time()
+        trace_id = generate_id("tr")
+        req_id = generate_id("req")
+        request_id = client_request_id or req_id
+
+        # Set logging context
+        correlation_trace_id.set(trace_id)
+        correlation_request_id.set(request_id)
+
+        domain_messages = [
+            ChatMessage(
+                role=m.role,
+                content=m.content,
+                name=m.name,
+                tool_calls=m.tool_calls,
+                tool_call_id=m.tool_call_id,
+            )
+            for m in request.messages
+        ]
+
+        params = GenerationParameters(
+            temperature=request.parameters.temperature,
+            max_output_tokens=request.parameters.max_output_tokens,
+        )
+
+        full_content = " ".join(m.content for m in request.messages)
+        prompt_fp = hashlib.sha256(full_content.encode("utf-8")).hexdigest()[:16]
+
+        # Deterministic Auto-Routing via DeterministicRouter
+        routing_opts = RoutingOptions(
+            policy=request.routing.policy,
+            preference=request.routing.preference,
+        )
+        routing_decision = self.router.route(
+            messages=domain_messages,
+            options=routing_opts,
+            cheap_alias=settings.CHEAP_MODEL_ALIAS,
+            strong_alias=settings.STRONG_MODEL_ALIAS,
+        )
+
+        model_alias = routing_decision.selected_model_alias
+        tier = routing_decision.tier
+        adapter = adapter_override or self.default_adapter
+        provider_name = routing_decision.selected_provider
+
+        # Check Cache
+        force_cache = bool(request.metadata and request.metadata.get("enable_cache"))
+        cache_eligible = is_cache_eligible(params, force_cache=force_cache)
+        cache_key = compute_cache_key(model_alias, domain_messages, params) if cache_eligible else ""
+
+        if cache_eligible:
+            cached_completion = await self.cache_service.get(cache_key)
+            if cached_completion:
+                total_latency = int((time.time() - start_time) * 1000)
+                cache_decision = RoutingDecision(
+                    policy_name=routing_decision.policy_name,
+                    policy_version=routing_decision.policy_version,
+                    tier=tier,
+                    selected_model_alias=model_alias,
+                    selected_provider=provider_name,
+                    reason_code="CACHE_HIT",
+                    reason_message="Returned from response cache",
+                    feature_summary={"cache_key": cache_key},
+                    fallback_used=False,
+                )
+
+                cost_res = self.cost_calculator.calculate(
+                    model_alias=model_alias,
+                    input_tokens=cached_completion.input_tokens,
+                    output_tokens=cached_completion.output_tokens,
+                    is_provider_usage=cached_completion.raw_usage_available,
+                )
+
+                request_record = GatewayRequestRecord(
+                    id=req_id,
+                    trace_id=trace_id,
+                    request_id=request_id,
+                    created_at=start_time,
+                    completed_at=time.time(),
+                    environment=settings.APP_ENV,
+                    gateway_version="0.1.0",
+                    api_version="v1",
+                    routing_policy=routing_decision.policy_name,
+                    routing_policy_version=routing_decision.policy_version,
+                    status="success",
+                    cache_status="hit",
+                    final_provider=provider_name,
+                    final_model_alias=model_alias,
+                    fallback_used=False,
+                    latency_ms=total_latency,
+                    prompt_fingerprint=prompt_fp,
+                    metadata=request.metadata or {},
+                )
+
+                try:
+                    await self.repository.record_request(request_record)
+                    await self.repository.record_decision(cache_decision, req_id)
+                except Exception as repo_err:
+                    logger.warning(f"Telemetry persistence degraded: {repo_err}")
+
+                default_metrics.record_request(
+                    policy=routing_decision.policy_name,
+                    model=model_alias,
+                    status="success",
+                    input_tokens=cached_completion.input_tokens,
+                    output_tokens=cached_completion.output_tokens,
+                    cost_usd=cost_res.estimated_cost or 0.0,
+                    latency_ms=total_latency,
+                    cached=True,
+                    fallback_used=False,
+                )
+
+                choice = ChatChoice(
+                    index=0,
+                    message=ChoiceMessage(role="assistant", content=cached_completion.content),
+                    finish_reason=cached_completion.finish_reason,
+                )
+                return ChatCompletionResponse(
+                    id=req_id,
+                    object="gateway.completion",
+                    created=int(start_time),
+                    model=model_alias,
+                    provider=provider_name,
+                    choices=[choice],
+                    usage=UsageSchema(
+                        input_tokens=cached_completion.input_tokens,
+                        output_tokens=cached_completion.output_tokens,
+                        total_tokens=cached_completion.total_tokens,
+                        cost_estimate=cost_res.estimated_cost,
+                        currency=cost_res.currency,
+                        cost_status=cost_res.cost_status,
+                    ),
+                    routing=RoutingDecisionSchema(
+                        policy=routing_decision.policy_name,
+                        policy_version=routing_decision.policy_version,
+                        tier=tier,
+                        reason="Served from cache",
+                        fallback_used=False,
+                    ),
+                    latency_ms=total_latency,
+                    trace_id=trace_id,
+                    cached=True,
+                )
+
+        # Execution with Bounded Retry and Fallback
+        deadline = DeadlineTracker(settings.REQUEST_TIMEOUT_SECONDS)
+        total_attempt_number = 0
+        completion: Optional[NormalizedCompletion] = None
+        fallback_used = False
+        final_model_alias = model_alias
+        last_error: Optional[Exception] = None
+
+        models_to_try = [(model_alias, False)]
+        if settings.FALLBACK_MODEL_ALIAS != model_alias:
+            models_to_try.append((settings.FALLBACK_MODEL_ALIAS, True))
+
+        for current_model, is_fallback in models_to_try:
+            if completion is not None:
+                break
+            if is_fallback and deadline.is_expired:
+                break
+
+            max_stage_attempts = 2
+            stage_attempts = 0
+
+            while stage_attempts < max_stage_attempts and not deadline.is_expired:
+                stage_attempts += 1
+                total_attempt_number += 1
+                attempt_id = generate_id("att")
+                attempt_start = time.time()
+                attempt_status = "success"
+                error_cat: Optional[str] = None
+                http_st: Optional[int] = 200
+                retry_after_s: Optional[float] = None
+
+                try:
+                    completion = await adapter.generate(
+                        messages=domain_messages,
+                        parameters=params,
+                        model_alias=current_model,
+                        timeout_seconds=min(10.0, deadline.remaining_seconds),
+                    )
+                    final_model_alias = current_model
+                    fallback_used = is_fallback
+                    break
+                except GatewayError as ge:
+                    last_error = ge
+                    attempt_status = "failure"
+                    error_cat = ge.error_type
+                    http_st = ge.status_code
+                    if hasattr(ge, "retry_after_s"):
+                        retry_after_s = ge.retry_after_s
+
+                    if not is_retryable_error(ge) or deadline.is_expired:
+                        break
+                    delay = calculate_backoff(stage_attempts, retry_after_s=retry_after_s)
+                    await asyncio.sleep(min(delay, deadline.remaining_seconds))
+                except Exception as ex:
+                    last_error = ex
+                    attempt_status = "failure"
+                    error_cat = "provider_server_error"
+                    http_st = 502
+                    if deadline.is_expired:
+                        break
+                    delay = calculate_backoff(stage_attempts)
+                    await asyncio.sleep(min(delay, deadline.remaining_seconds))
+                finally:
+                    attempt_end = time.time()
+                    attempt_rec = ProviderAttemptRecord(
+                        id=attempt_id,
+                        gateway_request_id=req_id,
+                        attempt_number=total_attempt_number,
+                        provider=provider_name,
+                        model_alias=current_model,
+                        started_at=attempt_start,
+                        completed_at=attempt_end,
+                        latency_ms=int((attempt_end - attempt_start) * 1000),
+                        status=attempt_status,  # type: ignore
+                        error_category=error_cat,
+                        http_status=http_st,
+                        is_fallback=is_fallback,
+                        provider_request_id=completion.provider_request_id if completion else None,
+                    )
+                    try:
+                        await self.repository.record_attempt(attempt_rec)
+                    except Exception as err:
+                        logger.warning(f"Telemetry degraded recording attempt: {err}")
+
+        total_latency = int((time.time() - start_time) * 1000)
+
+        # Final decision recording
+        final_decision = RoutingDecision(
+            policy_name=routing_decision.policy_name,
+            policy_version=routing_decision.policy_version,
+            tier="strong" if fallback_used or tier == "strong" else "cheap",  # type: ignore
+            selected_model_alias=final_model_alias,
+            selected_provider=provider_name,
+            reason_code="FALLBACK" if fallback_used else routing_decision.reason_code,
+            reason_message=f"{routing_decision.reason_message} (fallback used: {fallback_used})" if fallback_used else routing_decision.reason_message,
+            feature_summary=routing_decision.feature_summary,
+            fallback_used=fallback_used,
+        )
+
+        request_record = GatewayRequestRecord(
+            id=req_id,
+            trace_id=trace_id,
+            request_id=request_id,
+            created_at=start_time,
+            completed_at=time.time(),
+            environment=settings.APP_ENV,
+            gateway_version="0.1.0",
+            api_version="v1",
+            routing_policy=routing_decision.policy_name,
+            routing_policy_version=routing_decision.policy_version,
+            status="success" if completion else "error",
+            error_category=getattr(last_error, "error_type", "provider_unavailable") if not completion else None,
+            cache_status="miss",
+            final_provider=provider_name,
+            final_model_alias=final_model_alias,
+            fallback_used=fallback_used,
+            latency_ms=total_latency,
+            prompt_fingerprint=prompt_fp,
+            metadata=request.metadata or {},
+        )
+
+        cost_res = None
+        if completion:
+            cost_res = self.cost_calculator.calculate(
+                model_alias=final_model_alias,
+                input_tokens=completion.input_tokens,
+                output_tokens=completion.output_tokens,
+                is_provider_usage=completion.raw_usage_available,
+            )
+
+        try:
+            await self.repository.record_request(request_record)
+            await self.repository.record_decision(final_decision, req_id)
+            if completion and cost_res:
+                usage_record = UsageRecord(
+                    gateway_request_id=req_id,
+                    provider_attempt_id=attempt_id,
+                    input_tokens=completion.input_tokens,
+                    output_tokens=completion.output_tokens,
+                    total_tokens=completion.total_tokens,
+                    usage_source="provider" if completion.raw_usage_available else "estimated",
+                    rate_card_id=cost_res.rate_card_id,
+                    input_rate=cost_res.input_rate,
+                    output_rate=cost_res.output_rate,
+                    estimated_cost=cost_res.estimated_cost,
+                    currency=cost_res.currency,
+                    cost_status=cost_res.cost_status,
+                )
+                await self.repository.record_usage(usage_record)
+        except Exception as repo_err:
+            logger.warning(f"Telemetry degraded: {repo_err}")
+
+        if not completion:
+            if isinstance(last_error, GatewayError):
+                last_error.trace_id = trace_id
+                raise last_error
+            raise ProviderUnavailableError("All attempts and fallback failed to produce completion", trace_id=trace_id)
+
+        # Populate cache on success if eligible
+        if cache_eligible and cache_key:
+            await self.cache_service.set(cache_key, completion, settings.CACHE_TTL_SECONDS)
+
+        default_metrics.record_request(
+            policy=final_decision.policy_name,
+            model=final_model_alias,
+            status="success",
+            input_tokens=completion.input_tokens,
+            output_tokens=completion.output_tokens,
+            cost_usd=cost_res.estimated_cost if cost_res and cost_res.estimated_cost else 0.0,
+            latency_ms=total_latency,
+            cached=False,
+            fallback_used=fallback_used,
+        )
+
+        choice = ChatChoice(
+            index=0,
+            message=ChoiceMessage(role="assistant", content=completion.content, tool_calls=completion.tool_calls),
+            finish_reason=completion.finish_reason,
+        )
+
+        return ChatCompletionResponse(
+            id=req_id,
+            object="gateway.completion",
+            created=int(start_time),
+            model=final_model_alias,
+            provider=provider_name,
+            choices=[choice],
+            usage=UsageSchema(
+                input_tokens=completion.input_tokens,
+                output_tokens=completion.output_tokens,
+                total_tokens=completion.total_tokens,
+                cost_estimate=cost_res.estimated_cost if cost_res else None,
+                currency=cost_res.currency if cost_res else "USD",
+                cost_status=cost_res.cost_status if cost_res else "unavailable",
+            ),
+            routing=RoutingDecisionSchema(
+                policy=final_decision.policy_name,
+                policy_version=final_decision.policy_version,
+                tier=final_decision.tier,
+                reason=final_decision.reason_message,
+                fallback_used=fallback_used,
+            ),
+            latency_ms=total_latency,
+            trace_id=trace_id,
+            cached=False,
+        )

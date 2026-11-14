@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart AI Gateway - Live Chat</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-sub: #94a3b8;
+            --primary: #3b82f6;
+            --accent-cheap: #10b981;
+            --accent-strong: #8b5cf6;
+            --border: #334155;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg-color);
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+        header {
+            background: var(--card-bg);
+            border-bottom: 1px solid var(--border);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .brand { display: flex; align-items: center; gap: 10px; }
+        .brand h1 { font-size: 1.15rem; font-weight: 700; }
+        .controls { display: flex; align-items: center; gap: 12px; }
+        select {
+            background: var(--bg-color);
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        #chat-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            max-width: 900px;
+            width: 100%;
+            margin: 0 auto;
+        }
+        .message {
+            display: flex;
+            flex-direction: column;
+            max-width: 80%;
+            padding: 12px 16px;
+            border-radius: 12px;
+            line-height: 1.5;
+            font-size: 0.95rem;
+        }
+        .user-message {
+            align-self: flex-end;
+            background: var(--primary);
+            color: white;
+            border-bottom-right-radius: 2px;
+        }
+        .gateway-message {
+            align-self: flex-start;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-bottom-left-radius: 2px;
+        }
+        .meta-card {
+            margin-top: 8px;
+            padding: 8px 10px;
+            background: rgba(0, 0, 0, 0.25);
+            border-radius: 6px;
+            font-size: 0.78rem;
+            color: var(--text-sub);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .meta-badges {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .badge {
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.7rem;
+        }
+        .badge-cheap { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+        .badge-strong { background: rgba(139, 92, 246, 0.2); color: #a78bfa; }
+        .badge-cached { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+        footer {
+            background: var(--card-bg);
+            border-top: 1px solid var(--border);
+            padding: 16px 20px;
+        }
+        .input-bar {
+            max-width: 900px;
+            margin: 0 auto;
+            display: flex;
+            gap: 10px;
+        }
+        input[type="text"] {
+            flex: 1;
+            background: var(--bg-color);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 0.95rem;
+            outline: none;
+        }
+        input[type="text"]:focus { border-color: var(--primary); }
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0 20px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.9; }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="brand">
+            <span style="font-size: 1.3rem;">⚡</span>
+            <h1>Smart AI Gateway</h1>
+        </div>
+        <div class="controls">
+            <label for="policy-select" style="font-size: 0.85rem; color: var(--text-sub);">Routing Policy:</label>
+            <select id="policy-select">
+                <option value="adaptive" selected>Adaptive (Auto-Route)</option>
+                <option value="always_cheap">Always Cheap</option>
+                <option value="always_strong">Always Strong</option>
+            </select>
+            <a href="/docs" target="_blank" style="color: var(--text-sub); text-decoration: none; font-size: 0.85rem; margin-left: 8px;">API Docs</a>
+        </div>
+    </header>
+
+    <div id="chat-container">
+        <div class="message gateway-message">
+            Welcome to <strong>Smart AI Gateway</strong>! Ask a general question (routed to cheap tier) or paste Python code/debugging questions (auto-routed to strong tier).
+        </div>
+    </div>
+
+    <footer>
+        <div class="input-bar">
+            <input type="text" id="user-input" placeholder="Type your prompt here..." autocomplete="off">
+            <button id="send-btn">Send</button>
+        </div>
+    </footer>
+
+    <script>
+        const chatContainer = document.getElementById('chat-container');
+        const userInput = document.getElementById('user-input');
+        const sendBtn = document.getElementById('send-btn');
+        const policySelect = document.getElementById('policy-select');
+
+        let messageHistory = [];
+
+        function appendMessage(role, text, metadata = null) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${role}-message`;
+            msgDiv.innerText = text;
+
+            if (metadata) {
+                const metaCard = document.createElement('div');
+                metaCard.className = 'meta-card';
+
+                const tierClass = metadata.tier === 'strong' ? 'badge-strong' : 'badge-cheap';
+                const cachedHtml = metadata.cached ? '<span class="badge badge-cached">Cached</span>' : '';
+                const costHtml = metadata.cost !== null ? `$${metadata.cost.toFixed(6)}` : 'N/A';
+
+                metaCard.innerHTML = `
+                    <div class="meta-badges">
+                        <span class="badge ${tierClass}">${metadata.tier} (${metadata.model})</span>
+                        ${cachedHtml}
+                        <span>⚡ ${metadata.latency_ms}ms</span>
+                        <span>📊 ${metadata.tokens} tokens</span>
+                        <span>💰 ${costHtml}</span>
+                    </div>
+                    <div><strong>Reason:</strong> ${metadata.reason}</div>
+                `;
+                msgDiv.appendChild(metaCard);
+            }
+
+            chatContainer.appendChild(msgDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        async function sendMessage() {
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            appendMessage('user', text);
+            userInput.value = '';
+            userInput.disabled = true;
+            sendBtn.disabled = true;
+
+            messageHistory.push({ role: 'user', content: text });
+
+            const payload = {
+                messages: messageHistory,
+                routing: { policy: policySelect.value },
+                parameters: { temperature: 0.2, max_output_tokens: 1024 }
+            };
+
+            try {
+                const res = await fetch('/v1/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    const reply = data.choices[0].message.content;
+                    messageHistory.push({ role: 'assistant', content: reply });
+
+                    appendMessage('gateway', reply, {
+                        model: data.model,
+                        tier: data.routing.tier,
+                        reason: data.routing.reason,
+                        latency_ms: data.latency_ms,
+                        tokens: data.usage.total_tokens,
+                        cost: data.usage.cost_estimate,
+                        cached: data.cached
+                    });
+                } else {
+                    const err = await res.json();
+                    appendMessage('gateway', `⚠️ Error: ${err.error ? err.error.message : res.statusText}`);
+                }
+            } catch (e) {
+                appendMessage('gateway', `⚠️ Connection error: ${e.message}`);
+            } finally {
+                userInput.disabled = false;
+                sendBtn.disabled = false;
+                userInput.focus();
+            }
+        }
+
+        sendBtn.addEventListener('click', sendMessage);
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+    </script>
+</body>
+</html>

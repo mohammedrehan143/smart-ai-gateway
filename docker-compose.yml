@@ -1,0 +1,29 @@
+version: "3.8"
+
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smart-ai-gateway
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_ENV=production
+      - APP_HOST=0.0.0.0
+      - APP_PORT=8000
+      - LOG_LEVEL=INFO
+      - DATABASE_URL=sqlite:////app/data/gateway_traces.db
+      - CACHE_BACKEND=memory
+      - CACHE_TTL_SECONDS=300
+      - CHEAP_MODEL_ALIAS=mock-cheap
+      - STRONG_MODEL_ALIAS=mock-strong
+      - FALLBACK_MODEL_ALIAS=mock-strong
+      - REQUEST_TIMEOUT_SECONDS=30.0
+      - MAX_PROVIDER_ATTEMPTS=3
+    volumes:
+      - gateway_data:/app/data
+
+volumes:
+  gateway_data:
