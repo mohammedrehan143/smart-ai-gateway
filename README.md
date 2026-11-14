@@ -98,7 +98,84 @@ python scripts/master_orchestrator.py run-all
 
 ---
 
-## 5. API Reference & Verification Examples
+## 5. Smart AI CLI – Developer Tool (`smartai`)
+
+Smart AI Gateway includes a first-class developer CLI client named **Smart AI CLI** (`smartai`), designed with Typer, Rich terminal tables, OS Keyring security, and streaming support.
+
+### Installation
+```bash
+# Install locally in editable mode (or via pip)
+pip install -e .
+
+# Test binary availability
+smartai --version
+```
+
+### Authentication & Configuration
+```bash
+# Secure login (prompts for API key and saves in OS Keyring)
+smartai login
+
+# Check connection health and latency
+smartai status
+
+# Inspect or adjust preferences (~/.smartai/config.json)
+smartai config
+smartai config default_policy always_cheap
+smartai config default_temperature 0.0
+smartai config reset
+
+# Secure logout (clears Keyring credentials)
+smartai logout
+```
+
+### Interactive Chat & One-Shot Queries
+```bash
+# Interactive conversation loop with streaming and live token telemetry
+smartai chat
+# Supports in-chat commands: /exit, /reset, /policy <name>, /help
+
+# One-shot command query
+smartai ask "Explain the architecture of an AI Gateway in 2 sentences."
+smartai ask "Write a Python asyncio task pool" --policy always_strong
+```
+
+### Models & Pricing Catalog
+```bash
+# Display allowlisted models, capabilities, context limits, and rate cards
+smartai models
+smartai models --tier cheap
+smartai models --json
+```
+
+### LLMOps Observability & Spend Analytics
+```bash
+# Request volumes, token totals, average latency, and cache hit rates
+smartai usage
+smartai usage --limit 20 --hours 24
+
+# Cost analytics, spend by model/provider, rate card provenance
+smartai cost
+smartai cost --hours 48
+
+# Inspect recent deterministic routing decisions & feature extractions
+smartai route
+smartai route --limit 15
+smartai route --trace tr_1a1db57b829_1
+```
+
+### Agent Benchmarks & Cost Reduction Comparison
+```bash
+# Run benchmark suite across adaptive, always_cheap, and always_strong
+smartai benchmark --samples 5
+
+# Run complete benchmark and export results
+smartai benchmark --samples 21 --export docs/BENCHMARK_REPORT.md
+```
+
+---
+
+## 6. API Reference & Verification Examples
 
 ### Health Checks
 
