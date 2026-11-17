@@ -8,6 +8,8 @@ from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, Dict, List, Optional
 import httpx
 
+from app.core.prompts import GATEWAY_SYSTEM_PROMPT, sanitize_llm_response
+
 from app.core.errors import (
     InvalidRequestError,
     ProviderAuthError,
@@ -155,11 +157,17 @@ class ProviderManager:
         timeout = timeout_seconds or self.default_timeout_s
         resolved_base = self.resolve_base_url(p, base_url)
 
+        # Ensure standard system prompt is present to prevent model identity confusion or policy leak
+        has_system = any(m.get("role") == "system" for m in messages)
+        formatted_messages = list(messages)
+        if not has_system:
+            formatted_messages = [{"role": "system", "content": GATEWAY_SYSTEM_PROMPT}] + formatted_messages
+
         if p == "anthropic" and "api.anthropic.com" in resolved_base:
             return await self._execute_anthropic_native(
                 api_key=api_key,
                 model_id=model_id,
-                messages=messages,
+                messages=formatted_messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
                 base_url=resolved_base,
@@ -181,7 +189,7 @@ class ProviderManager:
 
         payload: Dict[str, Any] = {
             "model": model_id,
-            "messages": messages,
+            "messages": formatted_messages,
             "stream": False,
         }
         if is_modern_or_reasoning:
@@ -217,12 +225,8 @@ class ProviderManager:
             raise ProviderServerError(f"Malformed response from {p}: no choices array returned")
 
         first_msg = choices[0].get("message", {})
-        content = (
-            first_msg.get("content")
-            or first_msg.get("reasoning")
-            or first_msg.get("reasoning_content")
-            or ""
-        )
+        raw_content = first_msg.get("content") or ""
+        content = sanitize_llm_response(raw_content)
         finish_reason = choices[0].get("finish_reason", "stop")
         usage = data.get("usage", {})
         prompt_tokens = usage.get("prompt_tokens", 0)
@@ -331,9 +335,15 @@ class ProviderManager:
             or "deepseek-r1" in model_id.lower()
         )
 
+        # Ensure standard system prompt is present to prevent identity confusion or policy leak
+        has_system = any(m.get("role") == "system" for m in messages)
+        formatted_messages = list(messages)
+        if not has_system:
+            formatted_messages = [{"role": "system", "content": GATEWAY_SYSTEM_PROMPT}] + formatted_messages
+
         payload: Dict[str, Any] = {
             "model": model_id,
-            "messages": messages,
+            "messages": formatted_messages,
             "stream": True,
         }
         if is_modern_or_reasoning:
@@ -360,6 +370,12 @@ class ProviderManager:
                             break
                         try:
                             chunk = json.loads(raw_data)
+                            choices = chunk.get("choices", [])
+                            if choices:
+                                delta = choices[0].get("delta", {})
+                                # Exclude pure internal reasoning or thought chunks
+                                if not delta.get("content") and (delta.get("reasoning") or delta.get("reasoning_content")):
+                                    continue
                             yield chunk
                         except json.JSONDecodeError:
                             continue

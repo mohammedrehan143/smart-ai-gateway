@@ -69,17 +69,52 @@ class MockProviderAdapter(BaseProviderAdapter):
             finish_reason = "tool_calls"
         else:
             lower_msg = last_user_message.lower().strip()
-            if any(greeting in lower_msg for greeting in ("hi", "hello", "hey", "greetings")):
-                content = "Mock completion response: Hello! How can I assist you with the Smart AI Gateway today?"
-            elif "who are you" in lower_msg or "what are you" in lower_msg:
-                content = "Mock completion response: I am the Smart AI Gateway assistant, routing queries across multi-model tiers."
-            elif any(w in lower_msg for w in ("feature", "capabilities", "what can you do", "help")):
+            tokens_set = set(lower_msg.replace("?", " ").replace("!", " ").replace(".", " ").split())
+            if any(g in tokens_set for g in ("hi", "hello", "hey", "hy", "greetings", "yo", "sup")):
+                content = "Mock completion response: Hello! I am the Smart AI Gateway Assistant. How can I help you today with coding, architecture, or model routing?"
+            elif any(w in lower_msg for w in ("name", "who are you", "what are you", "what is your name")):
+                content = "Mock completion response: I am the Smart AI Gateway Assistant, an intelligent multi-agent routing and execution platform designed to orchestrate Weak and Strong AI models seamlessly."
+            elif any(w in lower_msg for w in ("debug", "debug code", "can you debug", "bug")):
                 content = (
-                    "Mock completion response: I provide multi-tier routing (cheap & strong models), "
-                    "semantic caching, cost tracking, and circuit-breaker reliability."
+                    "Mock completion response: Yes, I can debug code across Python, TypeScript, Go, Rust, Java, and C++. "
+                    "Share your code snippet, error message, or stack trace and I will identify the root cause, logic errors, "
+                    "concurrency issues, or syntax bugs and provide a complete fix."
+                )
+            elif any(w in lower_msg for w in ("reply", "reply?", "are you there")):
+                content = "Mock completion response: I am here and ready to help! What question, coding problem, or system architecture would you like to discuss?"
+            elif any(w in lower_msg for w in ("what all task", "task can the smart ai gateway", "feature", "capabilities", "what can you do", "help")):
+                content = (
+                    "Mock completion response: Below is a high-level overview of tasks the **Smart AI Gateway** performs:\n\n"
+                    "1. **Intelligent Dual-Agent Routing**: Automatically classifies task complexity in real time and routes to the Weak Agent (fast, cost-effective) or Strong Agent (deep reasoning, architecture, debugging).\n"
+                    "2. **BYOK Multi-Provider Execution**: Executes real API requests against Groq, OpenAI, Google Gemini, Anthropic, or OpenAI-compatible backends using your own encrypted API keys.\n"
+                    "3. **Cost & Latency Optimization**: Live token counting, rate-card cost calculation, and financial savings analytics.\n"
+                    "4. **Production Resilience**: Circuit breakers, automatic retries with exponential backoff, and model fallback progressions."
+                )
+            elif "python" in lower_msg and "what is" in lower_msg:
+                content = (
+                    "Mock completion response: Python is a versatile, high-level, interpreted programming language known for its clean, "
+                    "readable syntax. It is widely used in artificial intelligence, backend web development, data science, automation, "
+                    "and systems engineering."
+                )
+            elif "recursion" in lower_msg:
+                content = (
+                    "Mock completion response: Recursion is a programming technique where a function solves a problem by calling itself with smaller inputs.\n\n"
+                    "```python\ndef factorial(n: int) -> int:\n    if n <= 1:\n        return 1  # Base case\n    return n * factorial(n - 1)  # Recursive case\n```"
+                )
+            elif any(w in lower_msg for w in ("architecture", "distributed", "multi-agent")):
+                content = (
+                    "Mock completion response: ## Scalable Distributed Multi-Agent Architecture\n\n"
+                    "A resilient distributed multi-agent system comprises:\n"
+                    "1. **Decoupled Event Backbone**: Apache Kafka or NATS JetStream for asynchronous agent event streaming.\n"
+                    "2. **Consensus & State Store**: Redis or Raft-based state synchronization across worker nodes.\n"
+                    "3. **Dynamic Orchestrator**: Directed Acyclic Graph (DAG) workflow engine coordinating weak and strong agents.\n"
+                    "4. **Observability**: Distributed tracing with OpenTelemetry, Prometheus metrics, and automated circuit breakers."
                 )
             else:
-                content = f"Mock completion response: Request successfully processed by gateway ({model_alias})."
+                content = (
+                    f"Mock completion response: Request successfully processed by gateway ({model_alias}). "
+                    f"Task analyzed: '{last_user_message}'. The Smart AI Gateway is ready for your next prompt."
+                )
             finish_reason = "stop"
 
         input_text = " ".join(m.content for m in messages)

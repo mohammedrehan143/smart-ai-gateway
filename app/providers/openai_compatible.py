@@ -16,6 +16,7 @@ from app.core.logging import get_logger
 from app.domain.entities import ChatMessage, GenerationParameters, NormalizedCompletion
 from app.domain.registry import registry
 from app.providers.base import BaseProviderAdapter
+from app.core.prompts import GATEWAY_SYSTEM_PROMPT, sanitize_llm_response
 
 logger = get_logger("providers.openai")
 
@@ -48,7 +49,10 @@ class OpenAICompatibleAdapter(BaseProviderAdapter):
         model_meta = registry.get_model(model_alias)
         upstream_model = model_meta.upstream_model_id if model_meta else model_alias
 
+        has_system = any(m.role == "system" for m in messages)
         payload_messages = []
+        if not has_system:
+            payload_messages.append({"role": "system", "content": GATEWAY_SYSTEM_PROMPT})
         for m in messages:
             msg_dict: Dict[str, Any] = {"role": m.role, "content": m.content}
             if m.name:
@@ -111,7 +115,8 @@ class OpenAICompatibleAdapter(BaseProviderAdapter):
 
         first_choice = choices[0]
         choice_msg = first_choice.get("message", {})
-        content = choice_msg.get("content") or ""
+        raw_content = choice_msg.get("content") or ""
+        content = sanitize_llm_response(raw_content)
         finish_reason = first_choice.get("finish_reason", "stop")
         tool_calls = choice_msg.get("tool_calls")
 

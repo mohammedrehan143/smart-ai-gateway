@@ -266,7 +266,7 @@ class ExecutionEngine:
                 choices = chunk.get("choices", [])
                 if choices:
                     delta = choices[0].get("delta", {})
-                    content_piece = delta.get("content") or delta.get("reasoning") or delta.get("reasoning_content")
+                    content_piece = delta.get("content")
                     if content_piece:
                         full_content += content_piece
                         yield f"data: {json.dumps({'type': 'token', 'content': content_piece})}\n\n"
