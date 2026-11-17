@@ -29,8 +29,11 @@ COPY --from=builder /install /usr/local
 RUN addgroup --system appgroup && adduser --system --group appuser
 
 COPY app/ ./app
+COPY agents/ ./agents
+COPY smart_ai_cli/ ./smart_ai_cli
 COPY evaluation_dataset/ ./evaluation_dataset
 COPY pyproject.toml .
+COPY README.md .
 
 RUN chown -R appuser:appgroup /app
 

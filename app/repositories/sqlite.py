@@ -140,6 +140,21 @@ class SqliteTraceRepository(BaseTraceRepository):
                     PRIMARY KEY(user_id, provider)
                 );
 
+                CREATE TABLE IF NOT EXISTS agent_configurations (
+                    user_id TEXT NOT NULL,
+                    agent_type TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    encrypted_key TEXT NOT NULL,
+                    model_id TEXT NOT NULL,
+                    base_url TEXT,
+                    temperature REAL DEFAULT 0.2,
+                    max_tokens INTEGER DEFAULT 1024,
+                    is_enabled INTEGER DEFAULT 1,
+                    created_at REAL NOT NULL,
+                    updated_at REAL NOT NULL,
+                    PRIMARY KEY(user_id, agent_type)
+                );
+
                 CREATE TABLE IF NOT EXISTS budget_limits (
                     user_id TEXT NOT NULL,
                     project_id TEXT NOT NULL,

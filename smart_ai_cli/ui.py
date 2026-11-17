@@ -3,13 +3,22 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
+from rich.align import Align
+from rich.box import ROUNDED
 from rich.console import Console
+from rich.padding import Padding
 from rich.panel import Panel
+from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
 
 console = Console()
 error_console = Console(stderr=True)
+
+
+class ChatPrompt(Prompt):
+    """Custom prompt with clean suffix for interactive chatting."""
+    prompt_suffix = " "
 
 ASCII_BANNER = r"""[bold cyan]
    ____                      __     ___    ____   ________    ____
@@ -96,6 +105,19 @@ def print_table(
     console.print(table)
 
 
+def print_chat_header(gateway_url: str, policy: str, temperature: float) -> None:
+    """Displays a modern, centered header for interactive chat sessions."""
+    header_text = Text.from_markup(
+        f"[bold cyan]Smart AI Gateway[/bold cyan] [dim]• Interactive Chat[/dim]\n"
+        f"[dim]Connected:[/] [white]{gateway_url}[/]  •  [dim]Policy:[/] [yellow]{policy}[/]  •  [dim]Temp:[/] [white]{temperature}[/]\n"
+        f"[dim]Commands: /help • /reset • /policy • /exit[/dim]",
+        justify="center",
+    )
+    console.print()
+    console.print(Align.center(Panel(header_text, border_style="dim", box=ROUNDED, padding=(0, 2), expand=False)))
+    console.print()
+
+
 def print_chat_metadata(
     model: str,
     tier: str,
@@ -105,6 +127,7 @@ def print_chat_metadata(
     cost: Optional[float],
     cached: bool = False,
     trace_id: Optional[str] = None,
+    indent: int = 0,
 ) -> None:
     """Prints a concise execution summary pill under chat responses."""
     badge_tier = f"[{'green' if tier == 'cheap' else 'magenta'}]{tier}[/]"
@@ -120,4 +143,8 @@ def print_chat_metadata(
         f"[dim]cost:[/] [bold cyan]{cost_str}[/]"
         f"{cache_badge}{trace_str}"
     )
-    console.print(Panel(summary_text, border_style="dim", expand=False))
+    panel = Panel(summary_text, border_style="dim", expand=False)
+    if indent > 0:
+        console.print(Padding(panel, (0, 0, 0, indent)))
+    else:
+        console.print(panel)

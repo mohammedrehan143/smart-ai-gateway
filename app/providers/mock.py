@@ -68,7 +68,18 @@ class MockProviderAdapter(BaseProviderAdapter):
             content = ""
             finish_reason = "tool_calls"
         else:
-            content = f"Mock completion response for: {last_user_message}"
+            lower_msg = last_user_message.lower().strip()
+            if any(greeting in lower_msg for greeting in ("hi", "hello", "hey", "greetings")):
+                content = "Mock completion response: Hello! How can I assist you with the Smart AI Gateway today?"
+            elif "who are you" in lower_msg or "what are you" in lower_msg:
+                content = "Mock completion response: I am the Smart AI Gateway assistant, routing queries across multi-model tiers."
+            elif any(w in lower_msg for w in ("feature", "capabilities", "what can you do", "help")):
+                content = (
+                    "Mock completion response: I provide multi-tier routing (cheap & strong models), "
+                    "semantic caching, cost tracking, and circuit-breaker reliability."
+                )
+            else:
+                content = f"Mock completion response: Request successfully processed by gateway ({model_alias})."
             finish_reason = "stop"
 
         input_text = " ".join(m.content for m in messages)

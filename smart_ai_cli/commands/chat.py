@@ -10,8 +10,10 @@ from rich.prompt import Prompt
 from smart_ai_cli.client import GatewayClient, GatewayClientError
 from smart_ai_cli.config import default_config_manager
 from smart_ai_cli.ui import (
+    ChatPrompt,
     console,
     print_banner,
+    print_chat_header,
     print_chat_metadata,
     print_error,
     print_success,
@@ -19,6 +21,7 @@ from smart_ai_cli.ui import (
 )
 
 app = typer.Typer(help="Interactive chat session and one-shot queries.")
+CHAT_INDENT = "    "
 
 
 @app.command("chat")
@@ -35,18 +38,15 @@ def chat_cmd(
 
     client = GatewayClient()
 
-    print_banner()
-    console.print(f"[bold cyan]Connected to:[/] {cfg.gateway_url}")
-    console.print(f"[bold yellow]Active Policy:[/] {active_policy} • [bold white]Temperature:[/] {active_temp}")
-    console.print("[dim]Type your message, or enter /help, /reset, /policy, /exit[/dim]\n")
+    print_chat_header(cfg.gateway_url, active_policy, active_temp)
 
     conversation: List[Dict[str, str]] = []
 
     while True:
         try:
-            user_input = Prompt.ask("\n[bold green]You[/bold green]").strip()
+            user_input = ChatPrompt.ask(f"\n{CHAT_INDENT}[bold cyan]❯[/bold cyan]").strip()
         except (KeyboardInterrupt, EOFError):
-            console.print("\n[dim]Session ended.[/dim]")
+            console.print(f"\n{CHAT_INDENT}[dim]Session ended.[/dim]")
             break
 
         if not user_input:
@@ -54,52 +54,79 @@ def chat_cmd(
 
         # In-chat slash commands
         if user_input in ("/exit", "/quit", ":q"):
-            console.print("[dim]Exiting chat session. Goodbye![/dim]")
+            console.print(f"{CHAT_INDENT}[dim]Exiting chat session. Goodbye![/dim]\n")
             break
         elif user_input in ("/reset", "/clear"):
             conversation.clear()
-            print_success("Conversation history cleared.")
+            console.print(f"{CHAT_INDENT}[bold green]✔[/bold green] Conversation history cleared.")
             continue
         elif user_input.startswith("/policy"):
             parts = user_input.split()
             if len(parts) > 1 and parts[1] in ("adaptive", "always_cheap", "always_strong"):
                 active_policy = parts[1]
-                print_success(f"Switched routing policy to: [bold yellow]{active_policy}[/]")
+                console.print(f"{CHAT_INDENT}[bold green]✔[/bold green] Switched routing policy to: [bold yellow]{active_policy}[/]")
             else:
-                print_warning("Usage: /policy <adaptive | always_cheap | always_strong>")
+                console.print(f"{CHAT_INDENT}[bold yellow]▲[/bold yellow] Usage: /policy <adaptive | always_cheap | always_strong>")
             continue
         elif user_input == "/help":
             console.print(
-                "[bold cyan]Available chat session commands:[/]\n"
-                "  /exit, /quit      - Exit chat session\n"
-                "  /reset, /clear    - Clear conversation history\n"
-                "  /policy <name>    - Change policy (adaptive, always_cheap, always_strong)\n"
-                "  /help             - Display this help message"
+                f"{CHAT_INDENT}[bold cyan]Available chat session commands:[/]\n"
+                f"{CHAT_INDENT}  /exit, /quit      - Exit chat session\n"
+                f"{CHAT_INDENT}  /reset, /clear    - Clear conversation history\n"
+                f"{CHAT_INDENT}  /policy <name>    - Change policy (adaptive, always_cheap, always_strong)\n"
+                f"{CHAT_INDENT}  /help             - Display this help message"
             )
             continue
 
         conversation.append({"role": "user", "content": user_input})
-        console.print("[bold cyan]Assistant:[/bold cyan] ", end="")
 
         try:
             if use_stream:
                 full_reply = ""
                 meta_chunk: Optional[Dict] = None
 
-                for chunk in client.stream_chat(conversation, policy=active_policy, temperature=active_temp):
+                with console.status(f"{CHAT_INDENT}[dim cyan]Thinking...[/dim cyan]", spinner="dots") as status:
+                    stream_iter = client.stream_chat(conversation, policy=active_policy, temperature=active_temp)
+                    first_chunk = None
+                    for chunk in stream_iter:
+                        first_chunk = chunk
+                        break
+                    status.stop()
+
+                def write_stream_content(content: str) -> None:
+                    for char in content:
+                        if char == "\n":
+                            sys.stdout.write(f"\n{CHAT_INDENT}")
+                        else:
+                            sys.stdout.write(char)
+                    sys.stdout.flush()
+
+                console.print()
+                sys.stdout.write(CHAT_INDENT)
+
+                if first_chunk:
+                    choices = first_chunk.get("choices", [])
+                    if choices:
+                        delta = choices[0].get("delta", {})
+                        delta_content = delta.get("content")
+                        if delta_content:
+                            write_stream_content(delta_content)
+                            full_reply += delta_content
+                    if "usage" in first_chunk or "routing" in first_chunk:
+                        meta_chunk = first_chunk
+
+                for chunk in stream_iter:
                     choices = chunk.get("choices", [])
                     if choices:
                         delta = choices[0].get("delta", {})
                         delta_content = delta.get("content")
                         if delta_content:
-                            sys.stdout.write(delta_content)
-                            sys.stdout.flush()
+                            write_stream_content(delta_content)
                             full_reply += delta_content
-                    # Capture final chunk with usage & routing
                     if "usage" in chunk or "routing" in chunk:
                         meta_chunk = chunk
 
-                sys.stdout.write("\n")
+                sys.stdout.write("\n\n")
                 sys.stdout.flush()
 
                 conversation.append({"role": "assistant", "content": full_reply})
@@ -116,11 +143,17 @@ def chat_cmd(
                         cost=usage.get("cost_estimate"),
                         cached=meta_chunk.get("cached", False),
                         trace_id=meta_chunk.get("trace_id"),
+                        indent=4,
                     )
             else:
-                resp = client.chat(conversation, policy=active_policy, temperature=active_temp)
+                with console.status(f"{CHAT_INDENT}[dim cyan]Thinking...[/dim cyan]", spinner="dots"):
+                    resp = client.chat(conversation, policy=active_policy, temperature=active_temp)
+
+                console.print()
                 reply_text = resp["choices"][0]["message"]["content"]
-                console.print(reply_text)
+                indented_lines = "\n".join(f"{CHAT_INDENT}{line}" for line in reply_text.splitlines())
+                console.print(indented_lines)
+                console.print()
                 conversation.append({"role": "assistant", "content": reply_text})
 
                 routing = resp.get("routing", {})
@@ -134,14 +167,15 @@ def chat_cmd(
                     cost=usage.get("cost_estimate"),
                     cached=resp.get("cached", False),
                     trace_id=resp.get("trace_id"),
+                    indent=4,
                 )
 
         except GatewayClientError as exc:
             sys.stdout.write("\n")
-            print_error(f"Chat request failed: {exc}")
+            console.print(f"{CHAT_INDENT}[bold red]✖[/bold red] Chat request failed: {exc}")
         except Exception as exc:
             sys.stdout.write("\n")
-            print_error(f"Unexpected error: {exc}")
+            console.print(f"{CHAT_INDENT}[bold red]✖[/bold red] Unexpected error: {exc}")
 
 
 @app.command("ask")

@@ -205,3 +205,47 @@ def test_cli_ask_command(monkeypatch):
     assert res.exit_code == 0
     assert "This is an automated test reply." in res.stdout
     assert "mock-cheap" in res.stdout
+
+
+def test_cli_chat_command_streaming(monkeypatch):
+    def mock_stream(self, conversation, policy=None, temperature=None):
+        yield {"choices": [{"delta": {"content": "Streamed chat answer."}}]}
+        yield {
+            "choices": [{"delta": {}}],
+            "model": "mock-cheap",
+            "routing": {"tier": "cheap", "policy": "adaptive"},
+            "usage": {"total_tokens": 14, "cost_estimate": 0.000007},
+            "latency_ms": 18,
+        }
+
+    monkeypatch.setattr(GatewayClient, "stream_chat", mock_stream)
+
+    res = runner.invoke(app, ["chat"], input="Explain recursion\n/exit\n")
+    assert res.exit_code == 0
+    assert "Streamed chat answer." in res.stdout
+    assert "mock-cheap" in res.stdout
+    assert "Assistant:" not in res.stdout
+    assert "You:" not in res.stdout
+    assert "❯" in res.stdout
+
+
+def test_cli_chat_command_non_streaming(monkeypatch):
+    mock_resp = {
+        "id": "req_chat_test_002",
+        "model": "mock-strong",
+        "choices": [{"message": {"content": "Non-streamed direct answer."}}],
+        "usage": {"total_tokens": 20, "cost_estimate": 0.000050},
+        "routing": {"tier": "strong", "policy": "always_strong"},
+        "latency_ms": 45,
+        "cached": False,
+        "trace_id": "tr_chat_test_002",
+    }
+    monkeypatch.setattr(GatewayClient, "chat", lambda self, messages, policy="adaptive", temperature=0.2: mock_resp)
+
+    res = runner.invoke(app, ["chat", "--no-stream"], input="Hello world\n/exit\n")
+    assert res.exit_code == 0
+    assert "Non-streamed direct answer." in res.stdout
+    assert "mock-strong" in res.stdout
+    assert "Assistant:" not in res.stdout
+    assert "You:" not in res.stdout
+    assert "❯" in res.stdout

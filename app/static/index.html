@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart AI Gateway - Adaptive Agentic AI Platform</title>
+    <title>Smart AI Gateway - Intelligent Multi-Agent Orchestration Platform</title>
     <style>
         :root {
             --bg-color: #0b0f19;
@@ -12,12 +12,15 @@
             --text-main: #f8fafc;
             --text-sub: #94a3b8;
             --primary: #3b82f6;
-            --accent-cheap: #10b981;
+            --primary-hover: #2563eb;
+            --accent-weak: #10b981;
+            --accent-weak-bg: rgba(16, 185, 129, 0.12);
             --accent-strong: #8b5cf6;
-            --accent-collab: #f59e0b;
-            --accent-eval: #ec4899;
+            --accent-strong-bg: rgba(139, 92, 246, 0.12);
+            --accent-warning: #f59e0b;
             --border: #22314e;
             --danger: #ef4444;
+            --success: #10b981;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -27,127 +30,236 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
+            overflow: hidden;
         }
         header {
             background: var(--card-bg);
             border-bottom: 1px solid var(--border);
-            padding: 10px 20px;
+            padding: 12px 24px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 12px;
+            z-index: 10;
         }
         .brand { display: flex; align-items: center; gap: 10px; }
-        .brand h1 { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.02em; }
-        .tagline { font-size: 0.72rem; color: var(--text-sub); }
-        .controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-        select, button.control-btn {
-            background: var(--bg-color);
+        .brand h1 { font-size: 1.2rem; font-weight: 700; letter-spacing: -0.02em; }
+        .tagline { font-size: 0.75rem; color: var(--text-sub); }
+        .nav-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+        
+        button.control-btn {
+            background: var(--card-sub);
             color: var(--text-main);
             border: 1px solid var(--border);
-            padding: 6px 12px;
+            padding: 7px 14px;
             border-radius: 6px;
             font-size: 0.85rem;
+            font-weight: 500;
             cursor: pointer;
             transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
-        button.control-btn:hover { border-color: var(--primary); color: #fff; }
+        button.control-btn:hover { border-color: var(--primary); color: #fff; background: #26354a; }
+        button.control-btn.primary { background: var(--primary); border-color: var(--primary); color: white; }
+        button.control-btn.primary:hover { background: var(--primary-hover); }
+
+        /* Top Sub-Bar for Mode & Status */
+        .status-bar {
+            background: rgba(15, 23, 42, 0.85);
+            border-bottom: 1px solid var(--border);
+            padding: 8px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            font-size: 0.82rem;
+        }
+        .mode-selector {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .mode-toggle {
+            display: flex;
+            background: var(--card-sub);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+        .mode-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-sub);
+            padding: 6px 14px;
+            font-size: 0.82rem;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .mode-btn.active {
+            background: var(--primary);
+            color: white;
+        }
+        .mode-btn.weak.active {
+            background: var(--accent-weak);
+            color: white;
+        }
+        .mode-btn.strong.active {
+            background: var(--accent-strong);
+            color: white;
+        }
+        .agent-pills {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        .agent-pill {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 0.78rem;
+            border: 1px solid var(--border);
+        }
+        .agent-pill.weak { background: var(--accent-weak-bg); color: #34d399; border-color: rgba(16, 185, 129, 0.3); }
+        .agent-pill.strong { background: var(--accent-strong-bg); color: #c084fc; border-color: rgba(139, 92, 246, 0.3); }
+
         #chat-container {
             flex: 1;
             overflow-y: auto;
-            padding: 20px;
+            padding: 24px;
             display: flex;
             flex-direction: column;
-            gap: 16px;
-            max-width: 950px;
+            gap: 20px;
+            max-width: 1000px;
             width: 100%;
             margin: 0 auto;
         }
         .message {
             display: flex;
             flex-direction: column;
-            max-width: 85%;
-            padding: 14px 18px;
+            width: 100%;
             border-radius: 12px;
-            line-height: 1.55;
+            line-height: 1.6;
             font-size: 0.95rem;
         }
         .user-message {
             align-self: flex-end;
-            background: var(--primary);
+            max-width: 85%;
+            background: #2563eb;
             color: white;
-            border-bottom-right-radius: 2px;
+            padding: 12px 18px;
+            border-radius: 12px;
+            border-bottom-right-radius: 3px;
         }
         .gateway-message {
             align-self: flex-start;
             background: var(--card-bg);
             border: 1px solid var(--border);
-            border-bottom-left-radius: 2px;
-            width: 100%;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .gateway-header {
+            padding: 10px 16px;
+            background: rgba(0, 0, 0, 0.25);
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .gateway-body {
+            padding: 16px;
         }
         .message-content {
             white-space: pre-wrap;
             word-break: break-word;
         }
-        .meta-card {
-            margin-top: 10px;
-            padding: 10px 12px;
-            background: rgba(0, 0, 0, 0.35);
+        .meta-badges {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .badge {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 0.72rem;
+            letter-spacing: 0.03em;
+        }
+        .badge-weak { background: var(--accent-weak-bg); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+        .badge-strong { background: var(--accent-strong-bg); color: #c084fc; border: 1px solid rgba(139, 92, 246, 0.4); }
+        .badge-info { background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3); }
+        .badge-fallback { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+
+        .meta-details {
+            margin-top: 12px;
+            padding: 10px 14px;
+            background: rgba(0, 0, 0, 0.3);
             border: 1px solid var(--border);
             border-radius: 8px;
             font-size: 0.8rem;
             color: var(--text-sub);
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 4px;
         }
-        .meta-badges {
+        .meta-stats {
             display: flex;
-            gap: 6px;
+            gap: 16px;
             flex-wrap: wrap;
-            align-items: center;
-        }
-        .badge {
-            padding: 2px 7px;
-            border-radius: 4px;
-            font-weight: 600;
-            text-transform: uppercase;
-            font-size: 0.68rem;
-        }
-        .badge-cheap { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
-        .badge-strong { background: rgba(139, 92, 246, 0.15); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.3); }
-        .badge-collab { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.3); }
-        .badge-eval { background: rgba(236, 72, 153, 0.15); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.3); }
-        .badge-cached { background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3); }
-        .plan-box {
-            margin-top: 6px;
-            padding: 8px 10px;
-            background: rgba(245, 158, 11, 0.08);
-            border-left: 3px solid var(--accent-collab);
-            border-radius: 4px;
-            font-size: 0.76rem;
-        }
-        .eval-box {
             margin-top: 4px;
-            padding: 6px 10px;
-            background: rgba(236, 72, 153, 0.08);
-            border-left: 3px solid var(--accent-eval);
-            border-radius: 4px;
-            font-size: 0.76rem;
+            font-family: monospace;
+            font-size: 0.82rem;
         }
+
+        /* Chips for test prompts */
+        .prompt-chips {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            padding: 0 24px 8px 24px;
+            max-width: 1000px;
+            margin: 0 auto;
+            width: 100%;
+        }
+        .chip {
+            background: var(--card-sub);
+            color: var(--text-sub);
+            border: 1px solid var(--border);
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 0.76rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .chip:hover {
+            color: var(--text-main);
+            border-color: var(--primary);
+            background: #253349;
+        }
+
         footer {
             background: var(--card-bg);
             border-top: 1px solid var(--border);
-            padding: 14px 20px;
+            padding: 12px 24px;
         }
         .input-bar {
-            max-width: 950px;
+            max-width: 1000px;
             margin: 0 auto;
             display: flex;
-            gap: 10px;
+            gap: 12px;
+            align-items: flex-end;
         }
-        input[type="text"] {
+        textarea#user-input {
             flex: 1;
             background: var(--bg-color);
             border: 1px solid var(--border);
@@ -156,46 +268,95 @@
             border-radius: 8px;
             font-size: 0.95rem;
             outline: none;
+            resize: none;
+            height: 52px;
+            font-family: inherit;
+            line-height: 1.4;
             transition: border-color 0.2s;
         }
-        input[type="text"]:focus { border-color: var(--primary); }
+        textarea#user-input:focus { border-color: var(--primary); }
         button#send-btn {
             background: var(--primary);
             color: white;
             border: none;
-            padding: 0 24px;
+            padding: 0 26px;
+            height: 52px;
             border-radius: 8px;
             font-weight: 600;
             cursor: pointer;
-            transition: opacity 0.2s;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
         }
-        button#send-btn:hover { opacity: 0.9; }
+        button#send-btn:hover { background: var(--primary-hover); }
         button#send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        /* Modal / Drawer */
+        /* Modals */
         .modal-overlay {
             display: none;
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.75);
+            background: rgba(0, 0, 0, 0.8);
             z-index: 1000;
             align-items: center;
             justify-content: center;
+            padding: 20px;
         }
         .modal-card {
             background: var(--card-bg);
             border: 1px solid var(--border);
             border-radius: 12px;
             padding: 24px;
-            width: 90%;
-            max-width: 520px;
+            width: 100%;
+            max-width: 850px;
+            max-height: 90vh;
+            overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 14px;
+            gap: 18px;
         }
-        .modal-card h2 { font-size: 1.15rem; }
-        .form-group { display: flex; flex-direction: column; gap: 6px; }
-        .form-group label { font-size: 0.8rem; color: var(--text-sub); }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 12px;
+        }
+        .modal-header h2 { font-size: 1.25rem; font-weight: 700; }
+        .modal-close-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-sub);
+            font-size: 1.4rem;
+            cursor: pointer;
+        }
+        .modal-close-btn:hover { color: var(--text-main); }
+
+        .agent-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 768px) {
+            .agent-grid { grid-template-columns: 1fr; }
+        }
+        .agent-card-config {
+            background: var(--card-sub);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 18px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .agent-card-config.weak { border-top: 3px solid var(--accent-weak); }
+        .agent-card-config.strong { border-top: 3px solid var(--accent-strong); }
+        .agent-card-config h3 { font-size: 1.05rem; display: flex; align-items: center; justify-content: space-between; }
+
+        .form-group { display: flex; flex-direction: column; gap: 5px; }
+        .form-group label { font-size: 0.78rem; color: var(--text-sub); font-weight: 500; }
         .form-group input, .form-group select {
             background: var(--bg-color);
             border: 1px solid var(--border);
@@ -203,98 +364,278 @@
             padding: 8px 12px;
             border-radius: 6px;
             outline: none;
+            font-size: 0.85rem;
         }
+        .form-group input:focus, .form-group select:focus { border-color: var(--primary); }
+
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+        }
+        .metric-box {
+            background: var(--card-sub);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .metric-box .label { font-size: 0.75rem; color: var(--text-sub); text-transform: uppercase; }
+        .metric-box .value { font-size: 1.5rem; font-weight: 700; color: #fff; font-family: monospace; }
+
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s ease-in-out infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
     <header>
         <div class="brand">
-            <span style="font-size: 1.4rem;">⚡</span>
+            <span style="font-size: 1.5rem;">⚡</span>
             <div>
                 <h1>Smart AI Gateway</h1>
-                <div class="tagline">Adaptive Agentic AI Orchestration & Multi-Model Infrastructure</div>
+                <div class="tagline">Dual-Agent Intelligent Model Routing & Orchestration Engine</div>
             </div>
         </div>
-        <div class="controls">
-            <select id="strategy-select" title="Routing Strategy & Execution Topology">
-                <option value="adaptive_bandit">Adaptive (Contextual Bandit)</option>
-                <option value="cost_optimized">Cost Optimized</option>
-                <option value="balanced" selected>Balanced (Cost & Quality)</option>
-                <option value="quality_first">Quality First</option>
-                <option value="performance_optimized">Performance Optimized</option>
-                <option value="collab_peer_review">Agentic: Peer Review</option>
-                <option value="collab_code_verification">Agentic: Code Verification</option>
-                <option value="collab_consensus">Agentic: Consensus Synthesis</option>
-            </select>
-            <button class="control-btn" id="byok-btn">🔑 BYOK Keys</button>
-            <button class="control-btn" id="budget-btn">💰 Budgets</button>
+        <div class="nav-actions">
+            <button class="control-btn primary" id="agents-config-btn">⚙️ Agent Settings</button>
+            <button class="control-btn" id="analytics-btn">📊 Telemetry & Analytics</button>
+            <button class="control-btn" id="history-btn">📜 Execution History</button>
             <a href="/docs" target="_blank" style="color: var(--text-sub); text-decoration: none; font-size: 0.82rem; margin-left: 6px;">Swagger API</a>
         </div>
     </header>
 
-    <div id="chat-container">
-        <div class="message gateway-message">
-            <div class="message-content">
-Welcome to <strong>Smart AI Gateway 2.0</strong> — Adaptive Agentic Orchestration Layer.
-
-• <strong>Task Profiling</strong>: Automatically classifies prompts across 9 categories (Coding, Architecture, Math, Research, etc.)
-• <strong>Dynamic Routing</strong>: Multi-factor capability scoring, UCB1 contextual bandits, and circuit breaker health probes.
-• <strong>Agentic Collaboration</strong>: Multi-model peer reviews, AST code verifiers, and consensus synthesis.
-• <strong>Safeguards</strong>: Proactive financial budgets, L1/L2 context-safe semantic caching, and AST/JSON response evaluators.
+    <div class="status-bar">
+        <div class="mode-selector">
+            <span style="color: var(--text-sub); font-weight: 500;">Routing Mode:</span>
+            <div class="mode-toggle">
+                <button class="mode-btn active" id="mode-adaptive" onclick="setMode('adaptive')">🤖 Adaptive Router</button>
+                <button class="mode-btn weak" id="mode-weak" onclick="setMode('weak')">🟢 Weak Agent Only</button>
+                <button class="mode-btn strong" id="mode-strong" onclick="setMode('strong')">🟣 Strong Agent Only</button>
             </div>
         </div>
+        <div class="agent-pills">
+            <div class="agent-pill weak" id="weak-status-pill">
+                <span>🟢 Weak:</span> <strong id="weak-status-text">Checking...</strong>
+            </div>
+            <div class="agent-pill strong" id="strong-status-pill">
+                <span>🟣 Strong:</span> <strong id="strong-status-text">Checking...</strong>
+            </div>
+        </div>
+    </div>
+
+    <div id="chat-container">
+        <div class="message gateway-message">
+            <div class="gateway-header">
+                <div class="meta-badges">
+                    <span class="badge badge-info">System Architecture</span>
+                </div>
+            </div>
+            <div class="gateway-body">
+                <div class="message-content">
+Welcome to <strong>Smart AI Gateway</strong> — Intelligent Real-Execution Multi-Agent Platform.
+
+• <strong>Dual Agent Routing</strong>: Automatically routes between <strong>Weak Agent</strong> (fast, low-cost) and <strong>Strong Agent</strong> (deep reasoning, code, architecture).
+• <strong>BYOK Independence</strong>: Configure your OWN independent API keys and providers (OpenAI, Groq, Gemini, Anthropic, or OpenAI-compatible).
+• <strong>Real Model Execution</strong>: Actual live API requests to upstream LLMs with streaming, retries, and automated fallback.
+• <strong>Cost Transparency</strong>: Live tracking of prompt tokens, completion tokens, execution latency, and financial savings.
+
+Click <strong>⚙️ Agent Settings</strong> above to configure your provider API keys!
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="prompt-chips">
+        <span style="font-size: 0.76rem; color: var(--text-sub); padding-top: 4px;">Quick tests:</span>
+        <button class="chip" onclick="setPrompt('What is Python?')">What is Python? (Simple)</button>
+        <button class="chip" onclick="setPrompt('Convert 10 kilometres to metres.')">Convert 10 km to metres (Simple)</button>
+        <button class="chip" onclick="setPrompt('Explain binary search with code.')">Binary search with code (Routine)</button>
+        <button class="chip" onclick="setPrompt('Build a basic React login form.')">React login form (Routine)</button>
+        <button class="chip" onclick="setPrompt('Design a scalable distributed banking architecture with two-phase commit.')">Distributed architecture (Complex)</button>
+        <button class="chip" onclick="setPrompt('Debug a multi-threaded application suffering from race conditions and deadlocks.')">Concurrency debugging (Complex)</button>
     </div>
 
     <footer>
         <div class="input-bar">
-            <input type="text" id="user-input" placeholder="Ask a question, paste code to verify, or request architecture design..." autocomplete="off">
-            <button id="send-btn">Send</button>
+            <textarea id="user-input" placeholder="Type your prompt here... Press Enter to send, Shift+Enter for new line"></textarea>
+            <button id="send-btn" onclick="sendMessage()">Send</button>
         </div>
     </footer>
 
-    <!-- BYOK Modal -->
-    <div class="modal-overlay" id="byok-modal">
+    <!-- Agent Settings Modal -->
+    <div class="modal-overlay" id="agents-modal">
         <div class="modal-card">
-            <h2>🔑 BYOK Encrypted Credentials</h2>
-            <p style="font-size: 0.8rem; color: var(--text-sub);">Keys are Fernet AES-encrypted at rest and never exposed in logs or traces.</p>
-            <div class="form-group">
-                <label>Provider</label>
-                <select id="byok-provider">
-                    <option value="openai">OpenAI</option>
-                    <option value="anthropic">Anthropic</option>
-                    <option value="google">Google Gemini</option>
-                    <option value="groq">Groq</option>
-                </select>
+            <div class="modal-header">
+                <div>
+                    <h2>⚙️ Agent API Configuration</h2>
+                    <p style="font-size: 0.8rem; color: var(--text-sub); margin-top: 4px;">
+                        Configure separate providers and API keys for Weak and Strong agents. Keys are encrypted at rest with Fernet AES-128-CBC + HMAC-SHA256.
+                    </p>
+                </div>
+                <button class="modal-close-btn" onclick="closeModal('agents-modal')">&times;</button>
             </div>
-            <div class="form-group">
-                <label>API Key</label>
-                <input type="password" id="byok-key" placeholder="sk-...">
-            </div>
-            <div id="byok-list" style="font-size: 0.78rem; color: var(--text-sub); max-height: 120px; overflow-y: auto;"></div>
-            <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px;">
-                <button class="control-btn" id="byok-close">Close</button>
-                <button class="control-btn" style="background: var(--primary); color: white;" id="byok-save">Save Encrypted Key</button>
+
+            <div class="agent-grid">
+                <!-- Weak Agent Config -->
+                <div class="agent-card-config weak">
+                    <h3>
+                        <span>🟢 Weak Agent</span>
+                        <span style="font-size: 0.72rem; color: var(--text-sub);">Simple, fast, low-cost</span>
+                    </h3>
+                    <div class="form-group">
+                        <label>Provider</label>
+                        <select id="weak-provider" onchange="updateModelPresets('weak')">
+                            <option value="groq">Groq (Ultra-fast & cheap)</option>
+                            <option value="openai">OpenAI</option>
+                            <option value="google">Google Gemini</option>
+                            <option value="anthropic">Anthropic</option>
+                            <option value="openai_compatible">Custom / OpenAI-Compatible</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>API Key</label>
+                        <input type="password" id="weak-key" placeholder="Enter API key...">
+                    </div>
+                    <div class="form-group">
+                        <label>Model ID</label>
+                        <input type="text" id="weak-model" placeholder="e.g. llama-3.1-8b-instant" value="llama-3.1-8b-instant">
+                    </div>
+                    <div class="form-group">
+                        <label>Custom Base URL (Optional)</label>
+                        <input type="text" id="weak-base-url" placeholder="https://api.groq.com/openai/v1">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div class="form-group">
+                            <label>Temperature</label>
+                            <input type="number" id="weak-temp" step="0.1" min="0" max="2" value="0.2">
+                        </div>
+                        <div class="form-group">
+                            <label>Max Tokens</label>
+                            <input type="number" id="weak-tokens" step="64" min="1" value="1024">
+                        </div>
+                    </div>
+                    <div id="weak-test-status" style="font-size: 0.78rem; min-height: 18px;"></div>
+                    <div style="display: flex; gap: 8px; margin-top: 6px;">
+                        <button class="control-btn" style="flex: 1;" onclick="testAgentConnection('weak')">Test Connection</button>
+                        <button class="control-btn primary" style="flex: 1;" onclick="saveAgentConfig('weak')">Save Config</button>
+                    </div>
+                </div>
+
+                <!-- Strong Agent Config -->
+                <div class="agent-card-config strong">
+                    <h3>
+                        <span>🟣 Strong Agent</span>
+                        <span style="font-size: 0.72rem; color: var(--text-sub);">Reasoning, architecture, code</span>
+                    </h3>
+                    <div class="form-group">
+                        <label>Provider</label>
+                        <select id="strong-provider" onchange="updateModelPresets('strong')">
+                            <option value="openai">OpenAI (GPT-4o)</option>
+                            <option value="anthropic">Anthropic (Claude 3.5 Sonnet)</option>
+                            <option value="google">Google Gemini (Gemini 1.5 Pro)</option>
+                            <option value="groq">Groq (Llama 3.3 70B)</option>
+                            <option value="openai_compatible">Custom / OpenAI-Compatible</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>API Key</label>
+                        <input type="password" id="strong-key" placeholder="Enter API key...">
+                    </div>
+                    <div class="form-group">
+                        <label>Model ID</label>
+                        <input type="text" id="strong-model" placeholder="e.g. gpt-4o" value="gpt-4o">
+                    </div>
+                    <div class="form-group">
+                        <label>Custom Base URL (Optional)</label>
+                        <input type="text" id="strong-base-url" placeholder="https://api.openai.com/v1">
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                        <div class="form-group">
+                            <label>Temperature</label>
+                            <input type="number" id="strong-temp" step="0.1" min="0" max="2" value="0.2">
+                        </div>
+                        <div class="form-group">
+                            <label>Max Tokens</label>
+                            <input type="number" id="strong-tokens" step="128" min="1" value="2048">
+                        </div>
+                    </div>
+                    <div id="strong-test-status" style="font-size: 0.78rem; min-height: 18px;"></div>
+                    <div style="display: flex; gap: 8px; margin-top: 6px;">
+                        <button class="control-btn" style="flex: 1;" onclick="testAgentConnection('strong')">Test Connection</button>
+                        <button class="control-btn primary" style="flex: 1;" onclick="saveAgentConfig('strong')">Save Config</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Budget Modal -->
-    <div class="modal-overlay" id="budget-modal">
+    <!-- Analytics & Telemetry Modal -->
+    <div class="modal-overlay" id="analytics-modal">
         <div class="modal-card">
-            <h2>💰 Proactive Budget & Cost Limits</h2>
-            <p style="font-size: 0.8rem; color: var(--text-sub);">Requests exceeding financial caps are rejected prior to upstream dispatch.</p>
-            <div class="form-group">
-                <label>Max Cost Per Single Request ($)</label>
-                <input type="number" id="budget-per-req" step="0.001" placeholder="e.g. 0.05">
+            <div class="modal-header">
+                <div>
+                    <h2>📊 Platform Telemetry & Analytics</h2>
+                    <p style="font-size: 0.8rem; color: var(--text-sub); margin-top: 4px;">Live metrics tracking execution volume, agent distribution, and cost savings.</p>
+                </div>
+                <button class="modal-close-btn" onclick="closeModal('analytics-modal')">&times;</button>
             </div>
-            <div class="form-group">
-                <label>Daily Budget Cap ($)</label>
-                <input type="number" id="budget-daily" step="0.10" placeholder="e.g. 5.00">
+            <div class="analytics-grid" id="analytics-metrics-grid">
+                <div class="metric-box">
+                    <span class="label">Total Requests</span>
+                    <span class="value" id="stat-total">0</span>
+                </div>
+                <div class="metric-box">
+                    <span class="label">Weak Agent Ratio</span>
+                    <span class="value" style="color: #34d399;" id="stat-weak-ratio">0%</span>
+                </div>
+                <div class="metric-box">
+                    <span class="label">Strong Agent Ratio</span>
+                    <span class="value" style="color: #c084fc;" id="stat-strong-ratio">0%</span>
+                </div>
+                <div class="metric-box">
+                    <span class="label">Cost Savings</span>
+                    <span class="value" style="color: #60a5fa;" id="stat-savings-pct">0.0%</span>
+                </div>
+                <div class="metric-box">
+                    <span class="label">Total Spend</span>
+                    <span class="value" id="stat-total-cost">$0.00</span>
+                </div>
+                <div class="metric-box">
+                    <span class="label">Average Latency</span>
+                    <span class="value" id="stat-avg-latency">0ms</span>
+                </div>
             </div>
-            <div id="budget-summary" style="font-size: 0.78rem; color: var(--text-sub); margin-top: 6px;"></div>
-            <div style="display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px;">
-                <button class="control-btn" id="budget-close">Close</button>
-                <button class="control-btn" style="background: var(--primary); color: white;" id="budget-save">Save Budget</button>
+            <div style="margin-top: 10px;">
+                <h4 style="font-size: 0.9rem; margin-bottom: 8px;">Execution Breakdown by Agent Tier</h4>
+                <div style="background: var(--card-sub); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 0.82rem;" id="analytics-breakdown-text">
+                    Calculating breakdown...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Execution History Modal -->
+    <div class="modal-overlay" id="history-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div>
+                    <h2>📜 Recent Execution History</h2>
+                    <p style="font-size: 0.8rem; color: var(--text-sub); margin-top: 4px;">Audited log of dispatched prompts, routing decisions, latency, and costs.</p>
+                </div>
+                <button class="modal-close-btn" onclick="closeModal('history-modal')">&times;</button>
+            </div>
+            <div id="history-list-container" style="max-height: 400px; overflow-y: auto; font-size: 0.82rem; display: flex; flex-direction: column; gap: 8px;">
+                <em>Loading execution records...</em>
             </div>
         </div>
     </div>
@@ -303,197 +644,355 @@ Welcome to <strong>Smart AI Gateway 2.0</strong> — Adaptive Agentic Orchestrat
         const chatContainer = document.getElementById('chat-container');
         const userInput = document.getElementById('user-input');
         const sendBtn = document.getElementById('send-btn');
-        const strategySelect = document.getElementById('strategy-select');
 
+        let currentMode = 'adaptive';
         let messageHistory = [];
 
-        function appendMessage(role, text, meta = null) {
-            const msgDiv = document.createElement('div');
-            msgDiv.className = `message ${role}-message`;
-            
-            const contentDiv = document.createElement('div');
-            contentDiv.className = 'message-content';
-            contentDiv.innerText = text;
-            msgDiv.appendChild(contentDiv);
+        function setMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
+            if (mode === 'adaptive') document.getElementById('mode-adaptive').classList.add('active');
+            else if (mode === 'weak') document.getElementById('mode-weak').classList.add('active');
+            else if (mode === 'strong') document.getElementById('mode-strong').classList.add('active');
+        }
 
-            if (meta) {
-                const metaCard = document.createElement('div');
-                metaCard.className = 'meta-card';
+        function setPrompt(text) {
+            userInput.value = text;
+            userInput.focus();
+        }
 
-                const tierClass = meta.tier === 'strong' ? 'badge-strong' : 'badge-cheap';
-                const cachedHtml = meta.cached ? '<span class="badge badge-cached">Cached</span>' : '';
-                const costHtml = meta.cost !== null ? `$${meta.cost.toFixed(6)}` : 'N/A';
-                const categoryBadge = meta.category ? `<span class="badge" style="background:#1e293b; color:#cbd5e1;">${meta.category}</span>` : '';
-                const complexityBadge = meta.complexity ? `<span class="badge" style="background:#312e81; color:#c7d2fe;">${meta.complexity}</span>` : '';
-
-                let planHtml = '';
-                if (meta.plan && meta.plan.total_steps > 1) {
-                    const stepLines = (meta.plan.steps || []).map(s => `Step ${s.step_number}: ${s.title} (${s.assigned_model}) [${s.status}]`).join('<br>');
-                    planHtml = `<div class="plan-box"><strong>Agentic Plan (${meta.plan.mode}):</strong><br>${stepLines}</div>`;
-                }
-
-                let evalHtml = '';
-                if (meta.evaluation) {
-                    evalHtml = `<div class="eval-box"><strong>Inline Quality Evaluation:</strong> Score: ${(meta.evaluation.overall_score * 100).toFixed(0)}% | Code Valid: ${meta.evaluation.code_correctness >= 0.8 ? 'Yes' : 'N/A'} | Relevance: ${(meta.evaluation.relevance * 100).toFixed(0)}%</div>`;
-                }
-
-                metaCard.innerHTML = `
-                    <div class="meta-badges">
-                        <span class="badge ${tierClass}">${meta.tier} (${meta.model})</span>
-                        ${categoryBadge}
-                        ${complexityBadge}
-                        ${cachedHtml}
-                        <span>⚡ ${meta.latency_ms}ms</span>
-                        <span>📊 ${meta.tokens} tokens</span>
-                        <span>💰 ${costHtml}</span>
-                    </div>
-                    <div><strong>Routing Reason:</strong> ${meta.reason}</div>
-                    ${planHtml}
-                    ${evalHtml}
-                `;
-                msgDiv.appendChild(metaCard);
+        userInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
             }
+        });
 
-            chatContainer.appendChild(msgDiv);
+        function appendUserMessage(text) {
+            const div = document.createElement('div');
+            div.className = 'message user-message';
+            div.innerText = text;
+            chatContainer.appendChild(div);
             chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function appendGatewayMessage(reply, meta) {
+            const div = document.createElement('div');
+            div.className = 'message gateway-message';
+
+            const agentClass = meta.agent === 'strong' ? 'badge-strong' : 'badge-weak';
+            const agentLabel = meta.agent === 'strong' ? '🟣 STRONG AGENT' : '🟢 WEAK AGENT';
+            const fallbackBadge = meta.routing && meta.routing.fallback_used
+                ? '<span class="badge badge-fallback">⚠️ Fallback Used</span>'
+                : '';
+
+            const costStr = meta.cost !== undefined ? `$${meta.cost.toFixed(6)}` : 'N/A';
+            const tokens = meta.tokens || {};
+            const tokenStr = `In: ${tokens.prompt || 0} • Out: ${tokens.completion || 0} • Total: ${tokens.total || 0}`;
+
+            div.innerHTML = `
+                <div class="gateway-header">
+                    <div class="meta-badges">
+                        <span class="badge ${agentClass}">${agentLabel}</span>
+                        <span class="badge badge-info">${meta.provider || ''} (${meta.model || ''})</span>
+                        ${fallbackBadge}
+                    </div>
+                    <div style="font-size: 0.78rem; color: var(--text-sub); font-family: monospace;">
+                        ⚡ ${meta.latency_ms || 0}ms • 💰 ${costStr}
+                    </div>
+                </div>
+                <div class="gateway-body">
+                    <div class="message-content">${escapeHtml(reply)}</div>
+                    <div class="meta-details">
+                        <div><strong>Routing Reason:</strong> ${meta.routing ? meta.routing.reason : 'Automated dispatch'}</div>
+                        <div class="meta-stats">
+                            <span>Complexity: <strong>${meta.routing ? meta.routing.complexity : 1}/5</strong></span>
+                            <span>Confidence: <strong>${meta.routing ? Math.round((meta.routing.confidence || 0) * 100) : 100}%</strong></span>
+                            <span>Tokens: <strong>${tokenStr}</strong></span>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            chatContainer.appendChild(div);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+            return text.replace(/[&<>"']/g, m => map[m]);
         }
 
         async function sendMessage() {
             const text = userInput.value.trim();
             if (!text) return;
 
-            appendMessage('user', text);
+            appendUserMessage(text);
             userInput.value = '';
             userInput.disabled = true;
             sendBtn.disabled = true;
+            sendBtn.innerHTML = '<span class="spinner"></span> Executing...';
 
             messageHistory.push({ role: 'user', content: text });
 
-            const stratVal = strategySelect.value;
-            let routingPayload = { policy: "adaptive" };
-
-            if (stratVal.startsWith("collab_")) {
-                routingPayload.enable_collaboration = true;
-                routingPayload.collaboration_strategy = stratVal.replace("collab_", "");
-            } else if (stratVal === "adaptive_bandit") {
-                routingPayload.enable_bandit = true;
-            } else {
-                routingPayload.strategy = stratVal;
-            }
-
-            const payload = {
-                messages: messageHistory,
-                routing: routingPayload,
-                parameters: { temperature: 0.2, max_output_tokens: 1024 }
-            };
-
             try {
-                const res = await fetch('/v1/chat', {
+                const res = await fetch('/api/gateway/execute', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-User-ID': 'default_user' },
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify({
+                        prompt: text,
+                        mode: currentMode,
+                        conversation_history: messageHistory.slice(-6),
+                    })
                 });
 
                 if (res.ok) {
                     const data = await res.json();
-                    const reply = data.choices[0].message.content;
-                    messageHistory.push({ role: 'assistant', content: reply });
-
-                    appendMessage('gateway', reply, {
-                        model: data.model,
-                        tier: data.routing.tier,
-                        reason: data.routing.reason,
-                        complexity: data.routing.complexity,
-                        category: data.routing.task_category,
-                        latency_ms: data.latency_ms,
-                        tokens: data.usage.total_tokens,
-                        cost: data.usage.cost_estimate,
-                        cached: data.cached,
-                        plan: data.routing.agentic_plan,
-                        evaluation: data.routing.evaluation,
-                    });
+                    if (data.success) {
+                        messageHistory.push({ role: 'assistant', content: data.response });
+                        appendGatewayMessage(data.response, data);
+                    } else {
+                        appendErrorMessage(`Execution failure: ${data.error}`);
+                    }
                 } else {
                     const err = await res.json();
-                    appendMessage('gateway', `⚠️ Error: ${err.error ? err.error.message : res.statusText}`);
+                    appendErrorMessage(`Gateway Error: ${err.detail || (err.error ? err.error.message : res.statusText)}`);
                 }
-            } catch (e) {
-                appendMessage('gateway', `⚠️ Connection error: ${e.message}`);
+            } catch (err) {
+                appendErrorMessage(`Network transport error: ${err.message}`);
             } finally {
                 userInput.disabled = false;
                 sendBtn.disabled = false;
+                sendBtn.innerText = 'Send';
                 userInput.focus();
+                loadAgentStatus();
             }
         }
 
-        sendBtn.addEventListener('click', sendMessage);
-        userInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') sendMessage();
-        });
+        function appendErrorMessage(msg) {
+            const div = document.createElement('div');
+            div.className = 'message gateway-message';
+            div.innerHTML = `<div class="gateway-body" style="color: var(--danger); font-size: 0.9rem;">⚠️ ${escapeHtml(msg)}</div>`;
+            chatContainer.appendChild(div);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
 
-        // Modals management
-        const byokModal = document.getElementById('byok-modal');
-        const byokBtn = document.getElementById('byok-btn');
-        const byokClose = document.getElementById('byok-close');
-        const byokSave = document.getElementById('byok-save');
-        const byokList = document.getElementById('byok-list');
+        // --- Modals Management ---
+        function openModal(id) { document.getElementById(id).style.display = 'flex'; }
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-        async function loadBYOKList() {
+        document.getElementById('agents-config-btn').onclick = () => { openModal('agents-modal'); loadAgentSettings(); };
+        document.getElementById('analytics-btn').onclick = () => { openModal('analytics-modal'); loadAnalytics(); };
+        document.getElementById('history-btn').onclick = () => { openModal('history-modal'); loadHistory(); };
+
+        // Provider presets helper
+        function updateModelPresets(agent) {
+            const provider = document.getElementById(`${agent}-provider`).value;
+            const modelInput = document.getElementById(`${agent}-model`);
+            const baseInput = document.getElementById(`${agent}-base-url`);
+
+            if (provider === 'groq') {
+                modelInput.value = agent === 'weak' ? 'llama-3.1-8b-instant' : 'llama-3.3-70b-versatile';
+                baseInput.placeholder = 'https://api.groq.com/openai/v1';
+            } else if (provider === 'openai') {
+                modelInput.value = agent === 'weak' ? 'gpt-4o-mini' : 'gpt-4o';
+                baseInput.placeholder = 'https://api.openai.com/v1';
+            } else if (provider === 'google') {
+                modelInput.value = agent === 'weak' ? 'gemini-1.5-flash' : 'gemini-1.5-pro';
+                baseInput.placeholder = 'https://generativelanguage.googleapis.com/v1beta/openai';
+            } else if (provider === 'anthropic') {
+                modelInput.value = agent === 'weak' ? 'claude-3-haiku-20240307' : 'claude-3-5-sonnet-20241022';
+                baseInput.placeholder = 'https://api.anthropic.com/v1';
+            }
+        }
+
+        async function loadAgentStatus() {
             try {
-                const res = await fetch('/v1/credentials', { headers: { 'X-User-ID': 'default_user' } });
+                const res = await fetch('/api/agents/config', { headers: { 'X-User-ID': 'default_user' } });
                 if (res.ok) {
-                    const items = await res.json();
-                    if (items.length === 0) {
-                        byokList.innerHTML = '<em>No custom credentials registered yet. Using gateway fallback.</em>';
+                    const data = await res.json();
+                    const weak = data.agents && data.agents.weak;
+                    const strong = data.agents && data.agents.strong;
+
+                    const weakEl = document.getElementById('weak-status-text');
+                    const strongEl = document.getElementById('strong-status-text');
+
+                    if (weak && weak.is_enabled) {
+                        weakEl.innerText = `${weak.provider.toUpperCase()} (${weak.model_id})`;
                     } else {
-                        byokList.innerHTML = items.map(i => `<div>• <strong>${i.provider.toUpperCase()}</strong>: <code>${i.masked_key}</code></div>`).join('');
+                        weakEl.innerText = 'Not Configured';
+                    }
+
+                    if (strong && strong.is_enabled) {
+                        strongEl.innerText = `${strong.provider.toUpperCase()} (${strong.model_id})`;
+                    } else {
+                        strongEl.innerText = 'Not Configured';
                     }
                 }
             } catch (e) {}
         }
 
-        byokBtn.onclick = () => { byokModal.style.display = 'flex'; loadBYOKList(); };
-        byokClose.onclick = () => { byokModal.style.display = 'none'; };
-        byokSave.onclick = async () => {
-            const provider = document.getElementById('byok-provider').value;
-            const api_key = document.getElementById('byok-key').value.trim();
-            if (!api_key) return;
-            await fetch('/v1/credentials', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-User-ID': 'default_user' },
-                body: JSON.stringify({ provider, api_key })
-            });
-            document.getElementById('byok-key').value = '';
-            loadBYOKList();
-        };
-
-        const budgetModal = document.getElementById('budget-modal');
-        const budgetBtn = document.getElementById('budget-btn');
-        const budgetClose = document.getElementById('budget-close');
-        const budgetSave = document.getElementById('budget-save');
-        const budgetSummary = document.getElementById('budget-summary');
-
-        async function loadBudgetStatus() {
+        async function loadAgentSettings() {
             try {
-                const res = await fetch('/v1/budgets/default_project', { headers: { 'X-User-ID': 'default_user' } });
+                const res = await fetch('/api/agents/config', { headers: { 'X-User-ID': 'default_user' } });
                 if (res.ok) {
-                    const b = await res.json();
-                    budgetSummary.innerHTML = `Today's spend: <strong>$${b.today_spend}</strong> | Month: <strong>$${b.month_spend}</strong><br>Cap/req: ${b.max_cost_per_request ? '$'+b.max_cost_per_request : 'None'} | Daily cap: ${b.daily_budget ? '$'+b.daily_budget : 'None'}`;
+                    const data = await res.json();
+                    const weak = data.agents && data.agents.weak;
+                    const strong = data.agents && data.agents.strong;
+
+                    if (weak) {
+                        document.getElementById('weak-provider').value = weak.provider;
+                        document.getElementById('weak-model').value = weak.model_id;
+                        document.getElementById('weak-key').placeholder = weak.masked_key || 'Configured (leave blank to keep)';
+                        if (weak.base_url) document.getElementById('weak-base-url').value = weak.base_url;
+                        document.getElementById('weak-temp').value = weak.temperature;
+                        document.getElementById('weak-tokens').value = weak.max_tokens;
+                    }
+                    if (strong) {
+                        document.getElementById('strong-provider').value = strong.provider;
+                        document.getElementById('strong-model').value = strong.model_id;
+                        document.getElementById('strong-key').placeholder = strong.masked_key || 'Configured (leave blank to keep)';
+                        if (strong.base_url) document.getElementById('strong-base-url').value = strong.base_url;
+                        document.getElementById('strong-temp').value = strong.temperature;
+                        document.getElementById('strong-tokens').value = strong.max_tokens;
+                    }
                 }
             } catch (e) {}
         }
 
-        budgetBtn.onclick = () => { budgetModal.style.display = 'flex'; loadBudgetStatus(); };
-        budgetClose.onclick = () => { budgetModal.style.display = 'none'; };
-        budgetSave.onclick = async () => {
-            const perReq = parseFloat(document.getElementById('budget-per-req').value) || null;
-            const daily = parseFloat(document.getElementById('budget-daily').value) || null;
-            await fetch('/v1/budgets', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'X-User-ID': 'default_user' },
-                body: JSON.stringify({ project_id: 'default_project', max_cost_per_request: perReq, daily_budget: daily })
-            });
-            loadBudgetStatus();
-        };
+        async function saveAgentConfig(agent) {
+            const provider = document.getElementById(`${agent}-provider`).value;
+            const api_key = document.getElementById(`${agent}-key`).value.trim();
+            const model_id = document.getElementById(`${agent}-model`).value.trim();
+            const base_url = document.getElementById(`${agent}-base-url`).value.trim() || null;
+            const temperature = parseFloat(document.getElementById(`${agent}-temp`).value) || 0.2;
+            const max_tokens = parseInt(document.getElementById(`${agent}-tokens`).value) || 1024;
+            const statusDiv = document.getElementById(`${agent}-test-status`);
+
+            if (!api_key && document.getElementById(`${agent}-key`).placeholder.includes('Enter')) {
+                statusDiv.innerHTML = '<span style="color:var(--danger)">Please enter an API Key.</span>';
+                return;
+            }
+
+            statusDiv.innerHTML = '<span style="color:var(--text-sub)">Saving encrypted configuration...</span>';
+
+            try {
+                const res = await fetch('/api/agents/configure', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-User-ID': 'default_user' },
+                    body: JSON.stringify({
+                        agent_type: agent,
+                        provider,
+                        api_key: api_key || 'PRESERVE_EXISTING',
+                        model_id,
+                        base_url,
+                        temperature,
+                        max_tokens,
+                        is_enabled: true
+                    })
+                });
+
+                if (res.ok) {
+                    statusDiv.innerHTML = '<span style="color:var(--success)">✔ Configuration saved and encrypted securely.</span>';
+                    document.getElementById(`${agent}-key`).value = '';
+                    loadAgentStatus();
+                    loadAgentSettings();
+                } else {
+                    const err = await res.json();
+                    statusDiv.innerHTML = `<span style="color:var(--danger)">✖ Save error: ${err.detail || 'Failed'}</span>`;
+                }
+            } catch (e) {
+                statusDiv.innerHTML = `<span style="color:var(--danger)">✖ Network error: ${e.message}</span>`;
+            }
+        }
+
+        async function testAgentConnection(agent) {
+            const provider = document.getElementById(`${agent}-provider`).value;
+            const api_key = document.getElementById(`${agent}-key`).value.trim();
+            const model_id = document.getElementById(`${agent}-model`).value.trim();
+            const base_url = document.getElementById(`${agent}-base-url`).value.trim() || null;
+            const statusDiv = document.getElementById(`${agent}-test-status`);
+
+            statusDiv.innerHTML = '<span style="color:var(--primary)"><span class="spinner"></span> Testing connection...</span>';
+
+            try {
+                const res = await fetch('/api/agents/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-User-ID': 'default_user' },
+                    body: JSON.stringify({
+                        provider,
+                        api_key: api_key || null,
+                        model_id,
+                        base_url,
+                        agent_type: agent
+                    })
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                    statusDiv.innerHTML = `<span style="color:var(--success)">✔ Connected in ${data.latency_ms}ms! Probe response received.</span>`;
+                } else {
+                    statusDiv.innerHTML = `<span style="color:var(--danger)">✖ Connection failed: ${data.error || 'Unknown error'}</span>`;
+                }
+            } catch (e) {
+                statusDiv.innerHTML = `<span style="color:var(--danger)">✖ Probe error: ${e.message}</span>`;
+            }
+        }
+
+        async function loadAnalytics() {
+            try {
+                const res = await fetch('/api/analytics/overview');
+                if (res.ok) {
+                    const d = await res.json();
+                    document.getElementById('stat-total').innerText = d.total_requests;
+                    document.getElementById('stat-weak-ratio').innerText = `${Math.round((d.routing_distribution.weak || 0) * 100)}% (${d.weak_agent_requests})`;
+                    document.getElementById('stat-strong-ratio').innerText = `${Math.round((d.routing_distribution.strong || 0) * 100)}% (${d.strong_agent_requests})`;
+                    document.getElementById('stat-savings-pct').innerText = `${d.cost_savings_pct}%`;
+                    document.getElementById('stat-total-cost').innerText = `$${d.estimated_total_cost.toFixed(4)}`;
+                    document.getElementById('stat-avg-latency').innerText = `${d.avg_latency_ms}ms`;
+
+                    document.getElementById('analytics-breakdown-text').innerHTML = `
+                        Total prompt & completion tokens processed: <strong>${d.total_tokens.toLocaleString()}</strong><br>
+                        Estimated savings vs Always-Strong baseline: <strong>$${d.estimated_savings_usd.toFixed(4)} USD</strong> (${d.cost_savings_pct}% saved)<br>
+                        Execution success rate: <strong>${Math.round(d.success_rate * 100)}%</strong>
+                    `;
+                }
+            } catch (e) {}
+        }
+
+        async function loadHistory() {
+            const container = document.getElementById('history-list-container');
+            container.innerHTML = '<em>Fetching records...</em>';
+            try {
+                const res = await fetch('/api/gateway/history?limit=25');
+                if (res.ok) {
+                    const list = await res.json();
+                    if (!list || list.length === 0) {
+                        container.innerHTML = '<em>No executions recorded yet. Submit a prompt in the playground!</em>';
+                        return;
+                    }
+                    container.innerHTML = list.map(item => `
+                        <div style="background: var(--card-sub); border: 1px solid var(--border); border-radius: 6px; padding: 10px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                                <span><strong style="color: ${item.agent === 'strong' ? '#c084fc' : '#34d399'};">${item.agent.toUpperCase()} AGENT</strong> • ${item.provider} (${item.model})</span>
+                                <span style="font-family: monospace;">⚡ ${item.latency_ms}ms • 💰 $${item.cost.toFixed(6)}</span>
+                            </div>
+                            <div style="color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                <strong>Prompt:</strong> ${escapeHtml(item.prompt)}
+                            </div>
+                            <div style="font-size: 0.74rem; color: #64748b; margin-top: 4px;">
+                                Tokens: ${item.tokens ? item.tokens.total : 0} • Complexity: ${item.routing ? item.routing.complexity : 1}/5
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            } catch (e) {
+                container.innerHTML = '<em>Failed to load history.</em>';
+            }
+        }
+
+        // Initialize status on page load
+        loadAgentStatus();
     </script>
 </body>
 </html>

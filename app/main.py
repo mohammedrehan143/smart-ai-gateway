@@ -12,6 +12,7 @@ from app.api.deps import get_repository
 from app.api.health import router as health_router
 from app.api.metrics import router as metrics_router
 from app.api.v1.analytics import router as analytics_router
+from app.api.v1.agents_gateway import router as agents_gateway_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.agentic import router as agentic_router
 from app.api.v1.benchmark import router as benchmark_router
@@ -141,6 +142,7 @@ app.include_router(benchmark_router)
 app.include_router(credentials_router)
 app.include_router(budgets_router)
 app.include_router(agentic_router)
+app.include_router(agents_gateway_router)
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 

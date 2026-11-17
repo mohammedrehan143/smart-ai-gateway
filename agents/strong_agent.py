@@ -1,0 +1,131 @@
+"""Strong Agent: Handles complex reasoning, coding, architecture, debugging, and advanced tasks."""
+
+from __future__ import annotations
+
+from typing import Any, AsyncGenerator, Dict, List, Optional
+from agents.credential_manager import CredentialManager, default_credential_manager
+from agents.provider_manager import ProviderManager, ProviderResponse, default_provider_manager
+from agents.weak_agent import AgentExecutionResult
+from app.core.cost import default_cost_calculator
+from app.core.errors import InvalidRequestError
+from app.core.logging import get_logger
+
+logger = get_logger("agents.strong_agent")
+
+
+class StrongAgent:
+    """Agent specialized for deep reasoning, advanced engineering, and complex tasks."""
+
+    AGENT_TYPE = "strong"
+    DEFAULT_INPUT_RATE = 2.50    # $2.50 / 1M tokens
+    DEFAULT_OUTPUT_RATE = 10.00  # $10.00 / 1M tokens
+
+    def __init__(
+        self,
+        credential_mgr: Optional[CredentialManager] = None,
+        provider_mgr: Optional[ProviderManager] = None,
+    ):
+        self.credential_mgr = credential_mgr or default_credential_manager
+        self.provider_mgr = provider_mgr or default_provider_manager
+
+    def is_configured(self, user_id: str) -> bool:
+        """Checks if the Strong Agent has credentials configured."""
+        return self.credential_mgr.is_agent_ready(user_id, "strong")
+
+    def _get_config(self, user_id: str):
+        config = self.credential_mgr.get_agent_config(user_id, "strong")
+        if not config:
+            raise InvalidRequestError(
+                "Strong Agent is not configured. Please configure a provider and API key in Agent Settings."
+            )
+        if not config.is_enabled:
+            raise InvalidRequestError("Strong Agent is currently disabled.")
+        return config
+
+    def calculate_cost(self, prompt_tokens: int, completion_tokens: int, model_id: str) -> float:
+        """Computes cost in USD using model rate card or strong tier baseline."""
+        calc = default_cost_calculator.calculate(model_id, prompt_tokens, completion_tokens)
+        if calc and calc.estimated_cost is not None:
+            return calc.estimated_cost
+        return (prompt_tokens * (self.DEFAULT_INPUT_RATE / 1_000_000.0)) + (completion_tokens * (self.DEFAULT_OUTPUT_RATE / 1_000_000.0))
+
+    async def execute(
+        self,
+        user_id: str,
+        prompt: str,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        temperature_override: Optional[float] = None,
+        max_tokens_override: Optional[int] = None,
+    ) -> AgentExecutionResult:
+        """Executes prompt using the Strong Agent's configured provider & model."""
+        config = self._get_config(user_id)
+        api_key = config.get_plaintext_key()
+
+        messages = list(conversation_history or [])
+        messages.append({"role": "user", "content": prompt})
+
+        temperature = temperature_override if temperature_override is not None else config.temperature
+        max_tokens = max_tokens_override if max_tokens_override is not None else config.max_tokens
+
+        logger.info(
+            "Executing Strong Agent prompt",
+            extra={"user_id": user_id, "provider": config.provider, "model": config.model_id},
+        )
+
+        response: ProviderResponse = await self.provider_mgr.execute(
+            provider=config.provider,
+            api_key=api_key,
+            model_id=config.model_id,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            base_url=config.base_url,
+        )
+
+        cost = self.calculate_cost(response.prompt_tokens, response.completion_tokens, config.model_id)
+
+        return AgentExecutionResult(
+            agent=self.AGENT_TYPE,
+            content=response.content,
+            provider=config.provider,
+            model=config.model_id,
+            prompt_tokens=response.prompt_tokens,
+            completion_tokens=response.completion_tokens,
+            total_tokens=response.total_tokens,
+            latency_ms=response.latency_ms,
+            cost=cost,
+            finish_reason=response.finish_reason,
+            raw_response=response.raw_response,
+        )
+
+    async def stream_execute(
+        self,
+        user_id: str,
+        prompt: str,
+        conversation_history: Optional[List[Dict[str, str]]] = None,
+        temperature_override: Optional[float] = None,
+        max_tokens_override: Optional[int] = None,
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """Streams real token chunks using Strong Agent."""
+        config = self._get_config(user_id)
+        api_key = config.get_plaintext_key()
+
+        messages = list(conversation_history or [])
+        messages.append({"role": "user", "content": prompt})
+
+        temperature = temperature_override if temperature_override is not None else config.temperature
+        max_tokens = max_tokens_override if max_tokens_override is not None else config.max_tokens
+
+        async for chunk in self.provider_mgr.stream_execute(
+            provider=config.provider,
+            api_key=api_key,
+            model_id=config.model_id,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            base_url=config.base_url,
+        ):
+            yield chunk
+
+
+default_strong_agent = StrongAgent()
