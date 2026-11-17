@@ -73,6 +73,7 @@ async def create_chat_completion(
                 "latency_ms": completion.latency_ms,
                 "trace_id": completion.trace_id,
                 "cached": completion.cached,
+                "provider": completion.provider,
             }
             yield f"data: {json.dumps(final_data)}\n\n"
             yield "data: [DONE]\n\n"

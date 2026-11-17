@@ -64,6 +64,9 @@ class RoutingDecision:
     bandit_score: Optional[float] = None
     agentic_plan: Optional[Dict[str, Any]] = None
     evaluation: Optional[Dict[str, Any]] = None
+    classification_level: int = 1
+    agent: str = "Weak Agent"
+    mock_mode: bool = False
 
 
 @dataclass
@@ -78,6 +81,7 @@ class NormalizedCompletion:
     total_tokens: int = 0
     raw_usage_available: bool = True
     tool_calls: Optional[List[Dict[str, Any]]] = None
+    is_mock: bool = False
 
 
 @dataclass

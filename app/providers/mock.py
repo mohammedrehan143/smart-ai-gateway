@@ -97,4 +97,5 @@ class MockProviderAdapter(BaseProviderAdapter):
             total_tokens=input_tokens + output_tokens,
             raw_usage_available=True,
             tool_calls=tool_calls,
+            is_mock=True,
         )

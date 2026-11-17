@@ -57,6 +57,21 @@ class DeterministicRouter:
         cheap_default = cheap_alias or settings.CHEAP_MODEL_ALIAS
         strong_default = strong_alias or settings.STRONG_MODEL_ALIAS
 
+        # Check if weak/strong agent models are configured in CredentialManager (only when not in test/mock mode and not explicitly overridden)
+        try:
+            from app.providers.resolver import is_mock_mode_explicitly_enabled
+            if not is_mock_mode_explicitly_enabled() and not cheap_alias and not strong_alias:
+                from agents.credential_manager import default_credential_manager
+                effective_user = options.user_id or "default_user"
+                weak_cfg = default_credential_manager.get_agent_config(effective_user, "weak")
+                if weak_cfg and weak_cfg.is_enabled and weak_cfg.model_id:
+                    cheap_default = weak_cfg.model_id
+                strong_cfg = default_credential_manager.get_agent_config(effective_user, "strong")
+                if strong_cfg and strong_cfg.is_enabled and strong_cfg.model_id:
+                    strong_default = strong_cfg.model_id
+        except Exception:
+            pass
+
         # 1. Feature Extraction & Multi-Dimensional Intent Analysis
         features = extract_features(messages, has_tools=has_tools, format_json=format_json)
         feature_summary = features.to_safe_summary()
@@ -68,6 +83,7 @@ class DeterministicRouter:
             max_cost_limit=options.max_cost_limit,
         )
         complexity = profile.complexity.value
+        level = 1 if complexity == "SIMPLE" else (2 if complexity == "MODERATE" else 3)
         req_capabilities: Set[str] = set(profile.required_capabilities)
 
         # -------------------------------------------------------------
@@ -91,6 +107,9 @@ class DeterministicRouter:
                 alternative_eligible_models=[m.alias for m in self.registry.get_by_tier("cheap") if m.alias != cheap_default],
                 estimated_cost=self._estimate_cost(cheap_default, features.estimated_tokens),
                 candidate_progression=[cheap_default, strong_default],
+                classification_level=1,
+                agent="Weak Agent",
+                mock_mode=False,
             )
 
         if policy_name == "always_strong" or strategy == "always_strong":
@@ -111,6 +130,9 @@ class DeterministicRouter:
                 alternative_eligible_models=[m.alias for m in self.registry.get_by_tier("strong") if m.alias != strong_default],
                 estimated_cost=self._estimate_cost(strong_default, features.estimated_tokens),
                 candidate_progression=[strong_default, cheap_default],
+                classification_level=3,
+                agent="Strong Agent",
+                mock_mode=False,
             )
 
         if strategy == "manual" and options.manual_model:
@@ -131,6 +153,9 @@ class DeterministicRouter:
                     alternative_eligible_models=[m.alias for m in self.registry.list_models() if m.alias != manual_meta.alias],
                     estimated_cost=self._estimate_cost(manual_meta.alias, features.estimated_tokens),
                     candidate_progression=[manual_meta.alias, strong_default],
+                    classification_level=1 if manual_meta.tier == "cheap" else 3,
+                    agent="Weak Agent" if manual_meta.tier == "cheap" else "Strong Agent",
+                    mock_mode=False,
                 )
 
         # -------------------------------------------------------------
@@ -154,6 +179,9 @@ class DeterministicRouter:
                 alternative_eligible_models=[m.alias for m in self.registry.get_by_tier("strong") if m.alias != strong_default],
                 estimated_cost=self._estimate_cost(strong_default, features.estimated_tokens),
                 candidate_progression=[strong_default],
+                classification_level=3,
+                agent="Strong Agent",
+                mock_mode=False,
             )
 
         # -------------------------------------------------------------
@@ -200,6 +228,12 @@ class DeterministicRouter:
                 reason_message = "Basic informational request; selected high-assurance model under quality constraint."
             else:
                 cheap_candidates = [m for m in candidates_to_score if m.tier == "cheap"]
+                if not cheap_candidates:
+                    cheap_candidates = [m for m in eligible_models if m.tier == "cheap"]
+                if not cheap_candidates:
+                    cm = self.registry.get_model(cheap_default)
+                    if cm:
+                        cheap_candidates = [cm]
                 candidates = cheap_candidates if cheap_candidates else candidates_to_score
                 selected_model = min(
                     candidates,
@@ -349,6 +383,9 @@ class DeterministicRouter:
             candidate_progression=candidate_progression,
             bandit_score=bandit_score,
             agentic_plan=agentic_plan.to_summary(),
+            classification_level=level,
+            agent="Weak Agent" if selected_model.tier == "cheap" else "Strong Agent",
+            mock_mode=False,
         )
 
     def _estimate_cost(self, model_alias: str, input_tokens: int) -> Optional[float]:

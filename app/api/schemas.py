@@ -90,6 +90,9 @@ class RoutingDecisionSchema(BaseModel):
     bandit_score: Optional[float] = None
     agentic_plan: Optional[Dict[str, Any]] = None
     evaluation: Optional[Dict[str, Any]] = None
+    classification_level: Optional[int] = 1
+    agent: Optional[str] = "Weak Agent"
+    mock_mode: Optional[bool] = False
 
 
 class ChatCompletionResponse(BaseModel):

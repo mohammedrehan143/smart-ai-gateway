@@ -128,21 +128,51 @@ def print_chat_metadata(
     cached: bool = False,
     trace_id: Optional[str] = None,
     indent: int = 0,
+    prompt: Optional[str] = None,
+    classification_level: Optional[int] = None,
+    reason: Optional[str] = None,
+    agent: Optional[str] = None,
+    provider: Optional[str] = None,
+    mock_mode: Optional[bool] = None,
+    input_tokens: Optional[int] = None,
+    output_tokens: Optional[int] = None,
 ) -> None:
-    """Prints a concise execution summary pill under chat responses."""
-    badge_tier = f"[{'green' if tier == 'cheap' else 'magenta'}]{tier}[/]"
+    """Prints comprehensive execution provenance, routing classification, and cost metrics."""
     cost_str = f"${cost:.6f}" if cost is not None else "N/A"
     cache_badge = " [bold blue]⚡cached[/]" if cached else ""
-    trace_str = f" • [dim]tr:{trace_id[:16]}[/]" if trace_id else ""
+    trace_str = f"[dim]tr:{trace_id[:16]}[/]" if trace_id else ""
 
-    summary_text = (
-        f"[dim]model:[/] [bold white]{model}[/] ({badge_tier}) • "
-        f"[dim]policy:[/] [yellow]{policy}[/] • "
-        f"[dim]latency:[/] [cyan]{latency_ms}ms[/] • "
-        f"[dim]tokens:[/] [white]{tokens}[/] • "
-        f"[dim]cost:[/] [bold cyan]{cost_str}[/]"
-        f"{cache_badge}{trace_str}"
-    )
+    # Agent badge
+    agent_name = agent or ("Weak Agent" if tier == "cheap" else "Strong Agent")
+    agent_color = "green" if "weak" in agent_name.lower() or tier == "cheap" else "magenta"
+    agent_badge = f"[bold {agent_color}]{agent_name}[/]"
+
+    # Level badge
+    level_num = classification_level if classification_level is not None else (1 if tier == "cheap" else 3)
+    level_label = "Simple" if level_num == 1 else ("Moderate" if level_num == 2 else "Complex")
+    level_str = f"[bold cyan]Level {level_num}[/] [dim]({level_label})[/]"
+
+    # Mock mode indicator
+    is_mock = mock_mode if mock_mode is not None else (provider == "mock" or "mock" in model.lower())
+    mock_indicator = "[bold red]Enabled (Simulated)[/]" if is_mock else "[bold green]Disabled (Real API)[/]"
+
+    # Tokens detail
+    in_tok = input_tokens or 0
+    out_tok = output_tokens or 0
+    tok_str = f"[white]{tokens}[/] [dim](in: {in_tok}, out: {out_tok})[/]" if (in_tok or out_tok) else f"[white]{tokens}[/]"
+
+    lines = []
+    if prompt:
+        truncated_prompt = prompt if len(prompt) <= 70 else prompt[:67] + "..."
+        lines.append(f"[dim]Prompt:[/] [bold italic]{truncated_prompt}[/]")
+
+    lines.append(f"[dim]Classification:[/] {level_str} • [dim]Reason:[/] {reason or 'Standard routing heuristic'}")
+    lines.append(f"[dim]Routing:[/] {agent_badge} [dim]({tier})[/] • [dim]Provider:[/] [yellow]{provider or 'openai'}[/] • [dim]Model:[/] [bold white]{model}[/]")
+    lines.append(f"[dim]Mock Mode:[/] {mock_indicator} • [dim]Latency:[/] [cyan]{latency_ms}ms[/] • [dim]Tokens:[/] {tok_str} • [dim]Cost:[/] [bold cyan]{cost_str}[/]")
+    if trace_str or cache_badge:
+        lines.append(f"{trace_str}{cache_badge}".strip())
+
+    summary_text = "\n".join(lines)
     panel = Panel(summary_text, border_style="dim", expand=False)
     if indent > 0:
         console.print(Padding(panel, (0, 0, 0, indent)))

@@ -135,6 +135,7 @@ def chat_cmd(
                     routing = meta_chunk.get("routing", {})
                     usage = meta_chunk.get("usage", {})
                     print_chat_metadata(
+                        prompt=user_input,
                         model=meta_chunk.get("model", "unknown"),
                         tier=routing.get("tier", "unknown"),
                         policy=routing.get("policy", active_policy),
@@ -143,6 +144,13 @@ def chat_cmd(
                         cost=usage.get("cost_estimate"),
                         cached=meta_chunk.get("cached", False),
                         trace_id=meta_chunk.get("trace_id"),
+                        classification_level=routing.get("classification_level"),
+                        reason=routing.get("reason"),
+                        agent=routing.get("agent"),
+                        provider=meta_chunk.get("provider") or routing.get("selected_provider"),
+                        mock_mode=routing.get("mock_mode"),
+                        input_tokens=usage.get("input_tokens"),
+                        output_tokens=usage.get("output_tokens"),
                         indent=4,
                     )
             else:
@@ -159,6 +167,7 @@ def chat_cmd(
                 routing = resp.get("routing", {})
                 usage = resp.get("usage", {})
                 print_chat_metadata(
+                    prompt=user_input,
                     model=resp.get("model", "unknown"),
                     tier=routing.get("tier", "unknown"),
                     policy=routing.get("policy", active_policy),
@@ -167,6 +176,13 @@ def chat_cmd(
                     cost=usage.get("cost_estimate"),
                     cached=resp.get("cached", False),
                     trace_id=resp.get("trace_id"),
+                    classification_level=routing.get("classification_level"),
+                    reason=routing.get("reason"),
+                    agent=routing.get("agent"),
+                    provider=resp.get("provider") or routing.get("selected_provider"),
+                    mock_mode=routing.get("mock_mode"),
+                    input_tokens=usage.get("input_tokens"),
+                    output_tokens=usage.get("output_tokens"),
                     indent=4,
                 )
 
@@ -223,6 +239,7 @@ def ask_cmd(
                 routing = meta_chunk.get("routing", {})
                 usage = meta_chunk.get("usage", {})
                 print_chat_metadata(
+                    prompt=prompt,
                     model=meta_chunk.get("model", "unknown"),
                     tier=routing.get("tier", "unknown"),
                     policy=routing.get("policy", active_policy),
@@ -231,6 +248,13 @@ def ask_cmd(
                     cost=usage.get("cost_estimate"),
                     cached=meta_chunk.get("cached", False),
                     trace_id=meta_chunk.get("trace_id"),
+                    classification_level=routing.get("classification_level"),
+                    reason=routing.get("reason"),
+                    agent=routing.get("agent"),
+                    provider=meta_chunk.get("provider") or routing.get("selected_provider"),
+                    mock_mode=routing.get("mock_mode"),
+                    input_tokens=usage.get("input_tokens"),
+                    output_tokens=usage.get("output_tokens"),
                 )
         else:
             resp = client.chat(messages, policy=active_policy, temperature=active_temp)
@@ -240,6 +264,7 @@ def ask_cmd(
             routing = resp.get("routing", {})
             usage = resp.get("usage", {})
             print_chat_metadata(
+                prompt=prompt,
                 model=resp.get("model", "unknown"),
                 tier=routing.get("tier", "unknown"),
                 policy=routing.get("policy", active_policy),
@@ -248,6 +273,13 @@ def ask_cmd(
                 cost=usage.get("cost_estimate"),
                 cached=resp.get("cached", False),
                 trace_id=resp.get("trace_id"),
+                classification_level=routing.get("classification_level"),
+                reason=routing.get("reason"),
+                agent=routing.get("agent"),
+                provider=resp.get("provider") or routing.get("selected_provider"),
+                mock_mode=routing.get("mock_mode"),
+                input_tokens=usage.get("input_tokens"),
+                output_tokens=usage.get("output_tokens"),
             )
 
     except GatewayClientError as exc:

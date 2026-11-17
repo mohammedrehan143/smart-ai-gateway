@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import uuid
 from typing import Any, Dict, Generator, List, Optional
 import httpx
@@ -59,7 +60,8 @@ class GatewayClient:
         self.auth_mgr = auth_manager or default_auth_manager
 
         config = self.config_mgr.load_config()
-        self.base_url = (base_url or config.gateway_url).rstrip("/")
+        env_url = os.environ.get("SMART_AI_GATEWAY_URL") or os.environ.get("GATEWAY_URL")
+        self.base_url = (base_url or env_url or config.gateway_url).rstrip("/")
         self.api_key = api_key if api_key is not None else self.auth_mgr.get_api_key()
         self.timeout = timeout if timeout is not None else config.timeout_seconds
 

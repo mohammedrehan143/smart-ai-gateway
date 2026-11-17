@@ -15,6 +15,22 @@ from app.providers.mock import MockProviderAdapter
 from app.providers.openai_compatible import OpenAICompatibleAdapter
 
 
+def is_mock_mode_explicitly_enabled() -> bool:
+    """Determines whether mock execution mode is explicitly enabled (test suite or explicit flag)."""
+    import os, sys
+    if os.environ.get("APP_ENV") == "test" or "pytest" in sys.modules:
+        return True
+    if os.environ.get("ENABLE_MOCK_GATEWAY", "").lower() in ("true", "1", "yes"):
+        return True
+    try:
+        from app.core.config import settings
+        if getattr(settings, "ENABLE_MOCK_GATEWAY", False):
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def _is_real_key(key: Optional[str]) -> bool:
     """Checks if a credential string is a real upstream API key rather than dummy test data."""
     if not key or len(key.strip()) < 8:
@@ -70,6 +86,7 @@ class RealAgentAdapter(BaseProviderAdapter):
             output_tokens=resp.completion_tokens,
             total_tokens=resp.total_tokens,
             raw_usage_available=True,
+            is_mock=False,
         )
 
 
@@ -160,8 +177,17 @@ class DynamicProviderAdapter(BaseProviderAdapter):
                 base_url=settings.PROVIDER_BASE_URL,
             )
 
-        # 7. Default to deterministic mock adapter
-        return self._mock_adapter
+        # 7. Check if mock mode is explicitly enabled
+        if is_mock_mode_explicitly_enabled():
+            return self._mock_adapter
+
+        # In production / live execution, do NOT silently fall back to mock mode!
+        from app.core.errors import ProviderAuthError
+        target_agent = "weak" if tier == "cheap" else "strong"
+        raise ProviderAuthError(
+            f"No live API key configured for {target_agent} agent ({model_alias}). "
+            f"Please configure your API key in Agent Settings (http://localhost:8000) or set GROQ_API_KEY / OPENAI_API_KEY in your environment."
+        )
 
     async def generate(
         self,

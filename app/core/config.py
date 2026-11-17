@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     # Privacy & Telemetry
     STORE_PROMPT_CONTENT: bool = False
     METRICS_ENABLED: bool = True
+    ENABLE_MOCK_GATEWAY: bool = False
 
     # Security
     ALLOWED_CORS_ORIGINS: List[str] = ["*"]

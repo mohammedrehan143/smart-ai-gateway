@@ -259,6 +259,9 @@ class ChatOrchestrator:
                     estimated_cost=0.0,
                     bandit_score=routing_decision.bandit_score,
                     agentic_plan=routing_decision.agentic_plan,
+                    classification_level=routing_decision.classification_level,
+                    agent=routing_decision.agent,
+                    mock_mode=routing_decision.mock_mode,
                 ),
                 latency_ms=total_latency,
                 trace_id=trace_id,
@@ -453,6 +456,9 @@ class ChatOrchestrator:
             bandit_score=routing_decision.bandit_score,
             agentic_plan=executed_plan_summary,
             evaluation=evaluation_result.to_dict() if evaluation_result else None,
+            classification_level=routing_decision.classification_level,
+            agent="Weak Agent" if final_tier == "cheap" else "Strong Agent",
+            mock_mode=getattr(completion, "is_mock", False) if completion else False,
         )
 
         request_record = GatewayRequestRecord(
@@ -593,6 +599,9 @@ class ChatOrchestrator:
                 bandit_score=final_decision.bandit_score,
                 agentic_plan=final_decision.agentic_plan,
                 evaluation=final_decision.evaluation,
+                classification_level=final_decision.classification_level,
+                agent=final_decision.agent,
+                mock_mode=final_decision.mock_mode,
             ),
             latency_ms=total_latency,
             trace_id=trace_id,

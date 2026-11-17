@@ -3,393 +3,1072 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Smart AI Gateway - Intelligent Multi-Agent Orchestration Platform</title>
+    <title>Smart AI Gateway - Intelligent Multi-Agent Orchestration</title>
+    <!-- Marked.js for ChatGPT-style Markdown rendering -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <style>
         :root {
-            --bg-color: #0b0f19;
-            --card-bg: #151d30;
-            --card-sub: #1e293b;
-            --text-main: #f8fafc;
-            --text-sub: #94a3b8;
-            --primary: #3b82f6;
-            --primary-hover: #2563eb;
+            --bg-main: #212121;
+            --bg-sidebar: #171717;
+            --bg-surface: #2f2f2f;
+            --bg-surface-hover: #383838;
+            --border-subtle: #303030;
+            --border-medium: #424242;
+            --text-primary: #ececec;
+            --text-secondary: #b4b4b4;
+            --text-muted: #8e8e8e;
+            --primary: #10a37f;
+            --primary-hover: #1a7f64;
             --accent-weak: #10b981;
-            --accent-weak-bg: rgba(16, 185, 129, 0.12);
-            --accent-strong: #8b5cf6;
-            --accent-strong-bg: rgba(139, 92, 246, 0.12);
-            --accent-warning: #f59e0b;
-            --border: #22314e;
+            --accent-weak-bg: rgba(16, 185, 129, 0.15);
+            --accent-strong: #ab68ff;
+            --accent-strong-bg: rgba(171, 104, 255, 0.15);
             --danger: #ef4444;
-            --success: #10b981;
+            --user-bubble-bg: #2f2f2f;
+            --font-stack: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
         }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            background: var(--bg-color);
-            color: var(--text-main);
-            display: flex;
-            flex-direction: column;
+            font-family: var(--font-stack);
+            background-color: var(--bg-main);
+            color: var(--text-primary);
             height: 100vh;
-            overflow: hidden;
-        }
-        header {
-            background: var(--card-bg);
-            border-bottom: 1px solid var(--border);
-            padding: 12px 24px;
             display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 12px;
-            z-index: 10;
+            overflow: hidden;
+            -webkit-font-smoothing: antialiased;
         }
-        .brand { display: flex; align-items: center; gap: 10px; }
-        .brand h1 { font-size: 1.2rem; font-weight: 700; letter-spacing: -0.02em; }
-        .tagline { font-size: 0.75rem; color: var(--text-sub); }
-        .nav-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-        
-        button.control-btn {
-            background: var(--card-sub);
-            color: var(--text-main);
-            border: 1px solid var(--border);
-            padding: 7px 14px;
-            border-radius: 6px;
-            font-size: 0.85rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-        }
-        button.control-btn:hover { border-color: var(--primary); color: #fff; background: #26354a; }
-        button.control-btn.primary { background: var(--primary); border-color: var(--primary); color: white; }
-        button.control-btn.primary:hover { background: var(--primary-hover); }
 
-        /* Top Sub-Bar for Mode & Status */
-        .status-bar {
-            background: rgba(15, 23, 42, 0.85);
-            border-bottom: 1px solid var(--border);
-            padding: 8px 24px;
+        /* -------------------------------------------------------------
+           1. Sidebar (ChatGPT-style)
+           ------------------------------------------------------------- */
+        #sidebar {
+            width: 260px;
+            background-color: var(--bg-sidebar);
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border-subtle);
+            flex-shrink: 0;
+            transition: transform 0.25s ease, margin-left 0.25s ease;
+            z-index: 50;
+        }
+
+        #sidebar.collapsed {
+            margin-left: -260px;
+        }
+
+        .sidebar-header {
+            padding: 14px 16px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 12px;
-            font-size: 0.82rem;
+            border-bottom: 1px solid var(--border-subtle);
         }
-        .mode-selector {
+
+        .brand-link {
             display: flex;
             align-items: center;
-            gap: 8px;
-        }
-        .mode-toggle {
-            display: flex;
-            background: var(--card-sub);
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            overflow: hidden;
-        }
-        .mode-btn {
-            background: transparent;
-            border: none;
-            color: var(--text-sub);
-            padding: 6px 14px;
-            font-size: 0.82rem;
-            cursor: pointer;
+            gap: 10px;
+            text-decoration: none;
+            color: var(--text-primary);
             font-weight: 600;
-            transition: all 0.2s;
-        }
-        .mode-btn.active {
-            background: var(--primary);
-            color: white;
-        }
-        .mode-btn.weak.active {
-            background: var(--accent-weak);
-            color: white;
-        }
-        .mode-btn.strong.active {
-            background: var(--accent-strong);
-            color: white;
-        }
-        .agent-pills {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-        }
-        .agent-pill {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 3px 10px;
-            border-radius: 999px;
-            font-size: 0.78rem;
-            border: 1px solid var(--border);
-        }
-        .agent-pill.weak { background: var(--accent-weak-bg); color: #34d399; border-color: rgba(16, 185, 129, 0.3); }
-        .agent-pill.strong { background: var(--accent-strong-bg); color: #c084fc; border-color: rgba(139, 92, 246, 0.3); }
-
-        #chat-container {
-            flex: 1;
-            overflow-y: auto;
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            max-width: 1000px;
-            width: 100%;
-            margin: 0 auto;
-        }
-        .message {
-            display: flex;
-            flex-direction: column;
-            width: 100%;
-            border-radius: 12px;
-            line-height: 1.6;
             font-size: 0.95rem;
         }
-        .user-message {
-            align-self: flex-end;
-            max-width: 85%;
-            background: #2563eb;
-            color: white;
-            padding: 12px 18px;
-            border-radius: 12px;
-            border-bottom-right-radius: 3px;
+
+        .brand-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            background: linear-gradient(135deg, #10a37f, #6366f1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
         }
-        .gateway-message {
-            align-self: flex-start;
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            overflow: hidden;
-        }
-        .gateway-header {
-            padding: 10px 16px;
-            background: rgba(0, 0, 0, 0.25);
-            border-bottom: 1px solid var(--border);
+
+        .btn-new-chat {
+            margin: 12px 14px;
+            padding: 10px 14px;
+            background: transparent;
+            border: 1px solid var(--border-medium);
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-size: 0.88rem;
+            font-weight: 500;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 8px;
+            cursor: pointer;
+            transition: background 0.15s, border-color 0.15s;
         }
-        .gateway-body {
-            padding: 16px;
-        }
-        .message-content {
-            white-space: pre-wrap;
-            word-break: break-word;
-        }
-        .meta-badges {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            align-items: center;
-        }
-        .badge {
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-weight: 600;
-            text-transform: uppercase;
-            font-size: 0.72rem;
-            letter-spacing: 0.03em;
-        }
-        .badge-weak { background: var(--accent-weak-bg); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
-        .badge-strong { background: var(--accent-strong-bg); color: #c084fc; border: 1px solid rgba(139, 92, 246, 0.4); }
-        .badge-info { background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3); }
-        .badge-fallback { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
 
-        .meta-details {
-            margin-top: 12px;
-            padding: 10px 14px;
-            background: rgba(0, 0, 0, 0.3);
-            border: 1px solid var(--border);
+        .btn-new-chat:hover {
+            background-color: var(--bg-surface);
+            border-color: #555;
+        }
+
+        .sidebar-section-title {
+            padding: 8px 16px 4px 16px;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        /* Routing Mode Selector in Sidebar */
+        .sidebar-mode-selector {
+            padding: 0 14px 10px 14px;
+        }
+
+        .mode-chips {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 4px;
             border-radius: 8px;
-            font-size: 0.8rem;
-            color: var(--text-sub);
+            border: 1px solid var(--border-subtle);
+        }
+
+        .mode-chip-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            cursor: pointer;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.15s;
+        }
+
+        .mode-chip-btn:hover {
+            background: var(--bg-surface);
+            color: var(--text-primary);
+        }
+
+        .mode-chip-btn.active {
+            background: var(--bg-surface);
+            color: #fff;
+            font-weight: 600;
+            border: 1px solid var(--border-medium);
+        }
+
+        .mode-chip-btn.active.mode-adaptive {
+            border-left: 3px solid #3b82f6;
+        }
+
+        .mode-chip-btn.active.mode-weak {
+            border-left: 3px solid var(--accent-weak);
+        }
+
+        .mode-chip-btn.active.mode-strong {
+            border-left: 3px solid var(--accent-strong);
+        }
+
+        /* Agents Status in Sidebar */
+        .agents-summary-box {
+            margin: 0 14px 12px 14px;
+            padding: 10px 12px;
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .agent-status-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.78rem;
+        }
+
+        .agent-status-tag {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 500;
+        }
+
+        .agent-status-tag.weak { color: #34d399; }
+        .agent-status-tag.strong { color: #c084fc; }
+
+        .agent-status-val {
+            color: var(--text-muted);
+            max-width: 120px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-family: var(--font-mono);
+            font-size: 0.72rem;
+        }
+
+        /* Sidebar Conversation History List */
+        .sidebar-history {
+            flex: 1;
+            overflow-y: auto;
+            padding: 4px 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .history-item {
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.83rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.15s, color 0.15s;
+        }
+
+        .history-item:hover {
+            background-color: var(--bg-surface);
+            color: var(--text-primary);
+        }
+
+        .history-item.active {
+            background-color: var(--bg-surface);
+            color: #fff;
+            font-weight: 500;
+        }
+
+        .sidebar-footer {
+            padding: 12px 14px;
+            border-top: 1px solid var(--border-subtle);
             display: flex;
             flex-direction: column;
             gap: 4px;
         }
-        .meta-stats {
-            display: flex;
-            gap: 16px;
-            flex-wrap: wrap;
-            margin-top: 4px;
-            font-family: monospace;
-            font-size: 0.82rem;
-        }
 
-        /* Chips for test prompts */
-        .prompt-chips {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-            padding: 0 24px 8px 24px;
-            max-width: 1000px;
-            margin: 0 auto;
-            width: 100%;
-        }
-        .chip {
-            background: var(--card-sub);
-            color: var(--text-sub);
-            border: 1px solid var(--border);
-            padding: 4px 10px;
-            border-radius: 999px;
-            font-size: 0.76rem;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .chip:hover {
-            color: var(--text-main);
-            border-color: var(--primary);
-            background: #253349;
-        }
-
-        footer {
-            background: var(--card-bg);
-            border-top: 1px solid var(--border);
-            padding: 12px 24px;
-        }
-        .input-bar {
-            max-width: 1000px;
-            margin: 0 auto;
-            display: flex;
-            gap: 12px;
-            align-items: flex-end;
-        }
-        textarea#user-input {
-            flex: 1;
-            background: var(--bg-color);
-            border: 1px solid var(--border);
-            color: var(--text-main);
-            padding: 12px 16px;
-            border-radius: 8px;
-            font-size: 0.95rem;
-            outline: none;
-            resize: none;
-            height: 52px;
-            font-family: inherit;
-            line-height: 1.4;
-            transition: border-color 0.2s;
-        }
-        textarea#user-input:focus { border-color: var(--primary); }
-        button#send-btn {
-            background: var(--primary);
-            color: white;
+        .sidebar-menu-btn {
+            background: transparent;
             border: none;
-            padding: 0 26px;
-            height: 52px;
+            color: var(--text-secondary);
+            padding: 8px 10px;
             border-radius: 8px;
-            font-weight: 600;
+            font-size: 0.85rem;
             cursor: pointer;
-            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            width: 100%;
+            text-align: left;
+            transition: background 0.15s, color 0.15s;
+        }
+
+        .sidebar-menu-btn:hover {
+            background-color: var(--bg-surface);
+            color: var(--text-primary);
+        }
+
+        /* -------------------------------------------------------------
+           2. Main Chat Area
+           ------------------------------------------------------------- */
+        #main-chat {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            position: relative;
+            overflow: hidden;
+            background-color: var(--bg-main);
+        }
+
+        /* Top Nav Header */
+        .chat-top-nav {
+            height: 52px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 16px;
+            border-bottom: 1px solid var(--border-subtle);
+            background-color: rgba(33, 33, 33, 0.95);
+            backdrop-filter: blur(8px);
+            z-index: 20;
+            flex-shrink: 0;
+        }
+
+        .nav-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .btn-icon {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            padding: 6px;
+            border-radius: 6px;
+            cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
+            font-size: 1.1rem;
+            transition: background 0.15s, color 0.15s;
         }
-        button#send-btn:hover { background: var(--primary-hover); }
-        button#send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-        /* Modals */
+        .btn-icon:hover {
+            background-color: var(--bg-surface);
+            color: var(--text-primary);
+        }
+
+        .nav-model-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 12px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .badge-pill {
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .badge-pill.weak { background: var(--accent-weak-bg); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); }
+        .badge-pill.strong { background: var(--accent-strong-bg); color: #c084fc; border: 1px solid rgba(171, 104, 255, 0.3); }
+        .badge-pill.adaptive { background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.3); }
+
+        /* Scrollable Chat Container */
+        #chat-scroll-area {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            scroll-behavior: smooth;
+        }
+
+        .chat-thread {
+            max-width: 800px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 24px 20px 140px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+        }
+
+        /* ChatGPT Empty State Hero */
+        .empty-hero {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 50vh;
+            text-align: center;
+            padding: 40px 20px;
+            margin: auto 0;
+        }
+
+        .hero-sparkle {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #10a37f, #6366f1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.6rem;
+            margin-bottom: 20px;
+            box-shadow: 0 0 24px rgba(16, 163, 127, 0.3);
+        }
+
+        .empty-hero h2 {
+            font-size: 1.6rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+        }
+
+        .empty-hero p {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            max-width: 520px;
+            line-height: 1.5;
+            margin-bottom: 32px;
+        }
+
+        .hero-suggestions-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            width: 100%;
+            max-width: 650px;
+        }
+
+        @media (max-width: 640px) {
+            .hero-suggestions-grid { grid-template-columns: 1fr; }
+        }
+
+        .suggestion-card {
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
+            padding: 14px 16px;
+            text-align: left;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .suggestion-card:hover {
+            background-color: var(--bg-surface-hover);
+            border-color: var(--border-medium);
+            transform: translateY(-2px);
+        }
+
+        .suggestion-card strong {
+            font-size: 0.88rem;
+            color: var(--text-primary);
+        }
+
+        .suggestion-card span {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+        }
+
+        /* -------------------------------------------------------------
+           3. Messages Styling (ChatGPT accurate)
+           ------------------------------------------------------------- */
+        .message-row {
+            display: flex;
+            width: 100%;
+            animation: fadeIn 0.2s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* User Message (Right Aligned Bubble) */
+        .message-row.user {
+            justify-content: flex-end;
+        }
+
+        .user-bubble {
+            max-width: 75%;
+            background-color: var(--user-bubble-bg);
+            color: var(--text-primary);
+            padding: 12px 18px;
+            border-radius: 20px;
+            border-bottom-right-radius: 4px;
+            font-size: 0.98rem;
+            line-height: 1.55;
+            white-space: pre-wrap;
+            word-break: break-word;
+            border: 1px solid var(--border-subtle);
+        }
+
+        /* Assistant Message (Full Width with Avatar) */
+        .message-row.assistant {
+            justify-content: flex-start;
+            gap: 14px;
+        }
+
+        .assistant-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.95rem;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .assistant-avatar.weak {
+            background: var(--accent-weak-bg);
+            border: 1px solid var(--accent-weak);
+            color: #34d399;
+        }
+
+        .assistant-avatar.strong {
+            background: var(--accent-strong-bg);
+            border: 1px solid var(--accent-strong);
+            color: #c084fc;
+        }
+
+        .assistant-body {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .assistant-meta-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            flex-wrap: wrap;
+        }
+
+        .agent-badge-inline {
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+        }
+
+        .agent-badge-inline.weak {
+            background: var(--accent-weak-bg);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+        }
+
+        .agent-badge-inline.strong {
+            background: var(--accent-strong-bg);
+            color: #c084fc;
+            border: 1px solid rgba(171, 104, 255, 0.4);
+        }
+
+        /* Markdown Content Typography */
+        .markdown-content {
+            font-size: 0.98rem;
+            line-height: 1.68;
+            color: var(--text-primary);
+            word-break: break-word;
+        }
+
+        .markdown-content p {
+            margin-bottom: 12px;
+        }
+
+        .markdown-content p:last-child {
+            margin-bottom: 0;
+        }
+
+        .markdown-content h1,
+        .markdown-content h2,
+        .markdown-content h3,
+        .markdown-content h4 {
+            color: #fff;
+            margin-top: 18px;
+            margin-bottom: 10px;
+            font-weight: 600;
+            line-height: 1.3;
+        }
+
+        .markdown-content h1 { font-size: 1.35rem; }
+        .markdown-content h2 { font-size: 1.2rem; }
+        .markdown-content h3 { font-size: 1.05rem; }
+
+        .markdown-content ul,
+        .markdown-content ol {
+            margin: 10px 0 14px 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .markdown-content li {
+            padding-left: 2px;
+        }
+
+        .markdown-content blockquote {
+            border-left: 3px solid var(--border-medium);
+            padding: 6px 14px;
+            margin: 12px 0;
+            color: var(--text-secondary);
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 0 6px 6px 0;
+        }
+
+        .markdown-content a {
+            color: #60a5fa;
+            text-decoration: underline;
+            text-underline-offset: 3px;
+        }
+
+        .markdown-content inline-code,
+        .markdown-content code:not(pre code) {
+            background-color: rgba(255, 255, 255, 0.08);
+            color: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: var(--font-mono);
+            font-size: 0.88em;
+        }
+
+        /* Code Blocks with Header & Copy Button */
+        .code-block-wrapper {
+            margin: 14px 0;
+            border-radius: 8px;
+            background-color: #0d1117;
+            border: 1px solid var(--border-subtle);
+            overflow: hidden;
+        }
+
+        .code-block-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 6px 14px;
+            background-color: #161b22;
+            border-bottom: 1px solid var(--border-subtle);
+            font-size: 0.76rem;
+            color: var(--text-secondary);
+            font-family: var(--font-mono);
+        }
+
+        .code-copy-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.76rem;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: color 0.15s, background 0.15s;
+        }
+
+        .code-copy-btn:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .code-block-wrapper pre {
+            margin: 0;
+            padding: 14px 16px;
+            overflow-x: auto;
+            font-family: var(--font-mono);
+            font-size: 0.88rem;
+            line-height: 1.5;
+            color: #e6edf3;
+        }
+
+        /* Thinking / Streaming Indicator */
+        .thinking-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            padding: 6px 0;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--primary);
+            animation: pulse 1.4s ease-in-out infinite;
+        }
+
+        .pulse-dot:nth-child(2) { animation-delay: 0.2s; }
+        .pulse-dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes pulse {
+            0%, 80%, 100% { transform: scale(0.6); opacity: 0.3; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        .cursor-blink {
+            display: inline-block;
+            width: 7px;
+            height: 16px;
+            background-color: var(--text-primary);
+            margin-left: 2px;
+            vertical-align: middle;
+            animation: blink 0.9s infinite;
+        }
+
+        @keyframes blink {
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0; }
+        }
+
+        /* Accordion for Routing Details (Non-intrusive) */
+        .routing-details-accordion {
+            margin-top: 8px;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            padding-top: 6px;
+        }
+
+        .routing-details-toggle {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 0.74rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 0;
+            transition: color 0.15s;
+        }
+
+        .routing-details-toggle:hover {
+            color: var(--text-secondary);
+        }
+
+        .routing-details-content {
+            display: none;
+            margin-top: 6px;
+            padding: 10px 12px;
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid var(--border-subtle);
+            border-radius: 8px;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .routing-details-stats {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            font-family: var(--font-mono);
+            font-size: 0.76rem;
+            color: var(--text-muted);
+            margin-top: 2px;
+        }
+
+        /* -------------------------------------------------------------
+           4. ChatGPT-style Floating Input Capsule
+           ------------------------------------------------------------- */
+        .chat-input-wrapper {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 10px 20px 20px 20px;
+            background: linear-gradient(180deg, rgba(33, 33, 33, 0) 0%, rgba(33, 33, 33, 0.9) 30%, rgba(33, 33, 33, 1) 100%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 30;
+        }
+
+        .input-capsule {
+            max-width: 800px;
+            width: 100%;
+            background-color: var(--bg-surface);
+            border: 1px solid var(--border-medium);
+            border-radius: 26px;
+            padding: 10px 14px 10px 18px;
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+
+        .input-capsule:focus-within {
+            border-color: #666;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+        }
+
+        textarea#user-prompt {
+            flex: 1;
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--text-primary);
+            font-family: var(--font-stack);
+            font-size: 0.98rem;
+            line-height: 1.45;
+            resize: none;
+            max-height: 180px;
+            height: 26px;
+            padding: 2px 0;
+            box-sizing: border-box;
+        }
+
+        textarea#user-prompt::placeholder {
+            color: var(--text-muted);
+        }
+
+        .btn-send {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background-color: var(--primary);
+            color: #fff;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: background-color 0.15s, opacity 0.15s, transform 0.1s;
+        }
+
+        .btn-send:hover:not(:disabled) {
+            background-color: var(--primary-hover);
+            transform: scale(1.05);
+        }
+
+        .btn-send:disabled {
+            background-color: #444;
+            color: #888;
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .input-disclaimer {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            margin-top: 8px;
+            text-align: center;
+        }
+
+        /* -------------------------------------------------------------
+           5. Modals (Agent Config, Analytics, History)
+           ------------------------------------------------------------- */
         .modal-overlay {
             display: none;
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.8);
-            z-index: 1000;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(4px);
+            z-index: 100;
             align-items: center;
             justify-content: center;
             padding: 20px;
         }
+
         .modal-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 24px;
+            background: #1e1e1e;
+            border: 1px solid var(--border-medium);
+            border-radius: 16px;
             width: 100%;
-            max-width: 850px;
-            max-height: 90vh;
+            max-width: 860px;
+            max-height: 88vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6);
+        }
+
+        .modal-header {
+            padding: 16px 22px;
+            border-bottom: 1px solid var(--border-subtle);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .modal-header h3 {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .modal-body {
+            padding: 22px;
             overflow-y: auto;
             display: flex;
             flex-direction: column;
-            gap: 18px;
+            gap: 20px;
         }
-        .modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 12px;
-        }
-        .modal-header h2 { font-size: 1.25rem; font-weight: 700; }
-        .modal-close-btn {
-            background: transparent;
-            border: none;
-            color: var(--text-sub);
-            font-size: 1.4rem;
-            cursor: pointer;
-        }
-        .modal-close-btn:hover { color: var(--text-main); }
 
-        .agent-grid {
+        .agent-config-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 20px;
         }
+
         @media (max-width: 768px) {
-            .agent-grid { grid-template-columns: 1fr; }
+            .agent-config-grid { grid-template-columns: 1fr; }
+            #sidebar { position: fixed; height: 100vh; }
         }
-        .agent-card-config {
-            background: var(--card-sub);
-            border: 1px solid var(--border);
-            border-radius: 10px;
+
+        .agent-card {
+            background-color: #262626;
+            border: 1px solid var(--border-subtle);
+            border-radius: 12px;
             padding: 18px;
             display: flex;
             flex-direction: column;
             gap: 12px;
         }
-        .agent-card-config.weak { border-top: 3px solid var(--accent-weak); }
-        .agent-card-config.strong { border-top: 3px solid var(--accent-strong); }
-        .agent-card-config h3 { font-size: 1.05rem; display: flex; align-items: center; justify-content: space-between; }
 
-        .form-group { display: flex; flex-direction: column; gap: 5px; }
-        .form-group label { font-size: 0.78rem; color: var(--text-sub); font-weight: 500; }
-        .form-group input, .form-group select {
-            background: var(--bg-color);
-            border: 1px solid var(--border);
-            color: var(--text-main);
-            padding: 8px 12px;
-            border-radius: 6px;
-            outline: none;
-            font-size: 0.85rem;
-        }
-        .form-group input:focus, .form-group select:focus { border-color: var(--primary); }
+        .agent-card.weak { border-top: 3px solid var(--accent-weak); }
+        .agent-card.strong { border-top: 3px solid var(--accent-strong); }
 
-        .analytics-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 16px;
+        .agent-card h4 {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 1rem;
+            color: #fff;
         }
-        .metric-box {
-            background: var(--card-sub);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            padding: 16px;
+
+        .form-group {
             display: flex;
             flex-direction: column;
-            gap: 6px;
+            gap: 5px;
         }
-        .metric-box .label { font-size: 0.75rem; color: var(--text-sub); text-transform: uppercase; }
-        .metric-box .value { font-size: 1.5rem; font-weight: 700; color: #fff; font-family: monospace; }
 
+        .form-group label {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .form-group input,
+        .form-group select {
+            background-color: #171717;
+            border: 1px solid var(--border-medium);
+            color: #fff;
+            padding: 8px 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            border-color: var(--primary);
+        }
+
+        .key-input-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .key-input-container input {
+            width: 100%;
+            padding-right: 36px;
+        }
+
+        .key-toggle-btn {
+            position: absolute;
+            right: 8px;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 4px;
+        }
+
+        .key-toggle-btn:hover { color: var(--text-primary); }
+
+        .preset-chips-row {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+            margin-top: 4px;
+        }
+
+        .preset-chip {
+            background-color: #1a1a1a;
+            border: 1px solid var(--border-subtle);
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-size: 0.72rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .preset-chip:hover {
+            border-color: #666;
+            color: #fff;
+            background-color: #333;
+        }
+
+        .btn-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 6px;
+        }
+
+        .btn-modal {
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.82rem;
+            font-weight: 500;
+            cursor: pointer;
+            border: 1px solid var(--border-medium);
+            background: #333;
+            color: #fff;
+            transition: all 0.15s;
+            flex: 1;
+            text-align: center;
+        }
+
+        .btn-modal:hover { background: #444; }
+        .btn-modal.primary { background: var(--primary); border-color: var(--primary); }
+        .btn-modal.primary:hover { background: var(--primary-hover); }
+
+        /* Analytics Grid in Modal */
+        .analytics-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+            gap: 14px;
+        }
+
+        .kpi-card {
+            background: #262626;
+            border: 1px solid var(--border-subtle);
+            border-radius: 10px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .kpi-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; }
+        .kpi-val { font-size: 1.4rem; font-weight: 700; color: #fff; font-family: var(--font-mono); }
+
+        /* Spinner */
         .spinner {
             display: inline-block;
             width: 14px;
             height: 14px;
-            border: 2px solid rgba(255,255,255,0.3);
+            border: 2px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
             border-top-color: white;
             animation: spin 0.8s ease-in-out infinite;
@@ -398,429 +1077,762 @@
     </style>
 </head>
 <body>
-    <header>
-        <div class="brand">
-            <span style="font-size: 1.5rem;">⚡</span>
-            <div>
-                <h1>Smart AI Gateway</h1>
-                <div class="tagline">Dual-Agent Intelligent Model Routing & Orchestration Engine</div>
-            </div>
-        </div>
-        <div class="nav-actions">
-            <button class="control-btn primary" id="agents-config-btn">⚙️ Agent Settings</button>
-            <button class="control-btn" id="analytics-btn">📊 Telemetry & Analytics</button>
-            <button class="control-btn" id="history-btn">📜 Execution History</button>
-            <a href="/docs" target="_blank" style="color: var(--text-sub); text-decoration: none; font-size: 0.82rem; margin-left: 6px;">Swagger API</a>
-        </div>
-    </header>
 
-    <div class="status-bar">
-        <div class="mode-selector">
-            <span style="color: var(--text-sub); font-weight: 500;">Routing Mode:</span>
-            <div class="mode-toggle">
-                <button class="mode-btn active" id="mode-adaptive" onclick="setMode('adaptive')">🤖 Adaptive Router</button>
-                <button class="mode-btn weak" id="mode-weak" onclick="setMode('weak')">🟢 Weak Agent Only</button>
-                <button class="mode-btn strong" id="mode-strong" onclick="setMode('strong')">🟣 Strong Agent Only</button>
-            </div>
+    <!-- -------------------------------------------------------------
+         1. ChatGPT-style Sidebar
+         ------------------------------------------------------------- -->
+    <aside id="sidebar">
+        <div class="sidebar-header">
+            <a href="/" class="brand-link">
+                <div class="brand-icon">⚡</div>
+                <span>Smart AI Gateway</span>
+            </a>
+            <button class="btn-icon" onclick="toggleSidebar()" title="Close sidebar">✕</button>
         </div>
-        <div class="agent-pills">
-            <div class="agent-pill weak" id="weak-status-pill">
-                <span>🟢 Weak:</span> <strong id="weak-status-text">Checking...</strong>
-            </div>
-            <div class="agent-pill strong" id="strong-status-pill">
-                <span>🟣 Strong:</span> <strong id="strong-status-text">Checking...</strong>
-            </div>
-        </div>
-    </div>
 
-    <div id="chat-container">
-        <div class="message gateway-message">
-            <div class="gateway-header">
-                <div class="meta-badges">
-                    <span class="badge badge-info">System Architecture</span>
+        <button class="btn-new-chat" onclick="startNewChat()">
+            <span>+ New Chat</span>
+            <span style="font-size: 0.75rem; color: var(--text-muted);">Ctrl+K</span>
+        </button>
+
+        <div class="sidebar-section-title">Routing Engine</div>
+        <div class="sidebar-mode-selector">
+            <div class="mode-chips">
+                <button class="mode-chip-btn active mode-adaptive" id="mode-btn-adaptive" onclick="setRoutingMode('adaptive')">
+                    <span>🤖</span>
+                    <div>
+                        <div>Adaptive Router</div>
+                        <div style="font-size: 0.68rem; color: var(--text-muted);">Dynamic auto-routing</div>
+                    </div>
+                </button>
+                <button class="mode-chip-btn mode-weak" id="mode-btn-weak" onclick="setRoutingMode('weak')">
+                    <span>🟢</span>
+                    <div>
+                        <div>Weak Agent Only</div>
+                        <div style="font-size: 0.68rem; color: var(--text-muted);">Low-cost lightweight</div>
+                    </div>
+                </button>
+                <button class="mode-chip-btn mode-strong" id="mode-btn-strong" onclick="setRoutingMode('strong')">
+                    <span>🟣</span>
+                    <div>
+                        <div>Strong Agent Only</div>
+                        <div style="font-size: 0.68rem; color: var(--text-muted);">Deep reasoning & code</div>
+                    </div>
+                </button>
+            </div>
+        </div>
+
+        <div class="sidebar-section-title">Configured Agents</div>
+        <div class="agents-summary-box">
+            <div class="agent-status-row">
+                <span class="agent-status-tag weak">🟢 Weak</span>
+                <span class="agent-status-val" id="sidebar-weak-model">Loading...</span>
+            </div>
+            <div class="agent-status-row">
+                <span class="agent-status-tag strong">🟣 Strong</span>
+                <span class="agent-status-val" id="sidebar-strong-model">Loading...</span>
+            </div>
+        </div>
+
+        <div class="sidebar-section-title">Recent Conversations</div>
+        <div class="sidebar-history" id="sidebar-history-list">
+            <div style="font-size: 0.78rem; color: var(--text-muted); padding: 8px 12px;">No previous sessions</div>
+        </div>
+
+        <div class="sidebar-footer">
+            <button class="sidebar-menu-btn" onclick="openModal('agents-modal'); loadAgentSettings();">
+                <span>⚙️</span>
+                <span>Agent Settings</span>
+            </button>
+            <button class="sidebar-menu-btn" onclick="openModal('analytics-modal'); loadAnalytics();">
+                <span>📊</span>
+                <span>Telemetry & Savings</span>
+            </button>
+            <button class="sidebar-menu-btn" onclick="openModal('history-modal'); loadHistory();">
+                <span>📜</span>
+                <span>Execution History</span>
+            </button>
+        </div>
+    </aside>
+
+    <!-- -------------------------------------------------------------
+         2. Main Chat Area
+         ------------------------------------------------------------- -->
+    <main id="main-chat">
+        <!-- Top Nav Header -->
+        <header class="chat-top-nav">
+            <div class="nav-left">
+                <button class="btn-icon" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
+                <div class="nav-model-pill">
+                    <span id="nav-mode-badge" class="badge-pill adaptive">🤖 Adaptive</span>
+                    <span id="nav-mode-text" style="font-size: 0.82rem; color: var(--text-secondary);">Auto-Routing</span>
                 </div>
             </div>
-            <div class="gateway-body">
-                <div class="message-content">
-Welcome to <strong>Smart AI Gateway</strong> — Intelligent Real-Execution Multi-Agent Platform.
+            <div class="nav-right">
+                <button class="btn-icon" onclick="startNewChat()" title="Start New Chat">🗑️</button>
+            </div>
+        </header>
 
-• <strong>Dual Agent Routing</strong>: Automatically routes between <strong>Weak Agent</strong> (fast, low-cost) and <strong>Strong Agent</strong> (deep reasoning, code, architecture).
-• <strong>BYOK Independence</strong>: Configure your OWN independent API keys and providers (OpenAI, Groq, Gemini, Anthropic, or OpenAI-compatible).
-• <strong>Real Model Execution</strong>: Actual live API requests to upstream LLMs with streaming, retries, and automated fallback.
-• <strong>Cost Transparency</strong>: Live tracking of prompt tokens, completion tokens, execution latency, and financial savings.
+        <!-- Scrollable Chat Thread -->
+        <div id="chat-scroll-area">
+            <div class="chat-thread" id="chat-thread">
+                <!-- Empty State Hero (Hidden when messages exist) -->
+                <div class="empty-hero" id="empty-hero">
+                    <div class="hero-sparkle">✦</div>
+                    <h2>Smart AI Gateway</h2>
+                    <p>Intelligent real-execution gateway. Trivial prompts route to Weak Agent; advanced coding and multi-step reasoning route to Strong Agent.</p>
 
-Click <strong>⚙️ Agent Settings</strong> above to configure your provider API keys!
+                    <div class="hero-suggestions-grid">
+                        <div class="suggestion-card" onclick="submitPrompt('What is Python?')">
+                            <strong>What is Python?</strong>
+                            <span>Simple factual question • Level 1 (Weak)</span>
+                        </div>
+                        <div class="suggestion-card" onclick="submitPrompt('Explain recursion with a simple example.')">
+                            <strong>Explain recursion</strong>
+                            <span>Concept explanation • Level 1 (Weak)</span>
+                        </div>
+                        <div class="suggestion-card" onclick="submitPrompt('Design a scalable distributed banking architecture with two-phase commit.')">
+                            <strong>Distributed Architecture</strong>
+                            <span>High-level system design • Level 3 (Strong)</span>
+                        </div>
+                        <div class="suggestion-card" onclick="submitPrompt('Debug a multi-threaded application with race conditions and deadlocks.')">
+                            <strong>Concurrency Debugging</strong>
+                            <span>Advanced code analysis • Level 3 (Strong)</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <div class="prompt-chips">
-        <span style="font-size: 0.76rem; color: var(--text-sub); padding-top: 4px;">Quick tests:</span>
-        <button class="chip" onclick="setPrompt('What is Python?')">What is Python? (Simple)</button>
-        <button class="chip" onclick="setPrompt('Convert 10 kilometres to metres.')">Convert 10 km to metres (Simple)</button>
-        <button class="chip" onclick="setPrompt('Explain binary search with code.')">Binary search with code (Routine)</button>
-        <button class="chip" onclick="setPrompt('Build a basic React login form.')">React login form (Routine)</button>
-        <button class="chip" onclick="setPrompt('Design a scalable distributed banking architecture with two-phase commit.')">Distributed architecture (Complex)</button>
-        <button class="chip" onclick="setPrompt('Debug a multi-threaded application suffering from race conditions and deadlocks.')">Concurrency debugging (Complex)</button>
-    </div>
-
-    <footer>
-        <div class="input-bar">
-            <textarea id="user-input" placeholder="Type your prompt here... Press Enter to send, Shift+Enter for new line"></textarea>
-            <button id="send-btn" onclick="sendMessage()">Send</button>
+        <!-- ChatGPT Floating Input Capsule -->
+        <div class="chat-input-wrapper">
+            <div class="input-capsule">
+                <textarea
+                    id="user-prompt"
+                    placeholder="Ask anything... (Enter to send, Shift+Enter for new line)"
+                    rows="1"
+                    oninput="autoResizeTextarea(this)"
+                    onkeydown="handleTextareaKeydown(event)"
+                ></textarea>
+                <button id="btn-submit" class="btn-send" onclick="sendChatMessage()" title="Send prompt" disabled>
+                    <span id="btn-icon-content">↑</span>
+                </button>
+            </div>
+            <div class="input-disclaimer">
+                Smart AI Gateway autonomously routes prompts between Weak and Strong agents. Verify critical information.
+            </div>
         </div>
-    </footer>
+    </main>
 
-    <!-- Agent Settings Modal -->
+    <!-- -------------------------------------------------------------
+         3. Agent Settings Modal
+         ------------------------------------------------------------- -->
     <div class="modal-overlay" id="agents-modal">
         <div class="modal-card">
             <div class="modal-header">
                 <div>
-                    <h2>⚙️ Agent API Configuration</h2>
-                    <p style="font-size: 0.8rem; color: var(--text-sub); margin-top: 4px;">
-                        Configure separate providers and API keys for Weak and Strong agents. Keys are encrypted at rest with Fernet AES-128-CBC + HMAC-SHA256.
-                    </p>
+                    <h3>⚙️ Agent API Configuration</h3>
+                    <div style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">
+                        Configure separate providers and API keys. Credentials are encrypted at rest with Fernet AES-128-CBC + HMAC-SHA256.
+                    </div>
                 </div>
-                <button class="modal-close-btn" onclick="closeModal('agents-modal')">&times;</button>
+                <button class="btn-icon" onclick="closeModal('agents-modal')">✕</button>
             </div>
+            <div class="modal-body">
+                <div class="agent-config-grid">
+                    <!-- Weak Agent Configuration -->
+                    <div class="agent-card weak">
+                        <h4>
+                            <span>🟢 Weak Agent</span>
+                            <span style="font-size: 0.72rem; color: #34d399;">Simple & low-cost tasks</span>
+                        </h4>
+                        <div class="form-group">
+                            <label>Provider</label>
+                            <select id="weak-provider" onchange="applyProviderDefaults('weak')">
+                                <option value="groq">Groq (Ultra-fast & inexpensive)</option>
+                                <option value="openai">OpenAI</option>
+                                <option value="google">Google Gemini</option>
+                                <option value="anthropic">Anthropic</option>
+                                <option value="openai_compatible">Custom / OpenAI-Compatible</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Model ID</label>
+                            <input type="text" id="weak-model" value="openai/gpt-oss-120b" placeholder="Model alias">
+                            <div class="preset-chips-row">
+                                <span class="preset-chip" onclick="setPresetModel('weak', 'openai/gpt-oss-120b', 1.0, 2048)">⚡ openai/gpt-oss-120b</span>
+                                <span class="preset-chip" onclick="setPresetModel('weak', 'llama-3.1-8b-instant', 0.2, 1024)">llama-3.1-8b</span>
+                                <span class="preset-chip" onclick="setPresetModel('weak', 'gpt-4o-mini', 0.2, 1024)">gpt-4o-mini</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>API Key</label>
+                            <div class="key-input-container">
+                                <input type="password" id="weak-key" placeholder="Enter API key...">
+                                <button type="button" class="key-toggle-btn" onclick="togglePasswordVisibility('weak-key')">👁️</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label>Custom Base URL (Optional)</label>
+                            <input type="text" id="weak-base-url" placeholder="https://api.groq.com/openai/v1">
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div class="form-group">
+                                <label>Temperature</label>
+                                <input type="number" id="weak-temp" step="0.1" min="0" max="2" value="0.2">
+                            </div>
+                            <div class="form-group">
+                                <label>Max Tokens</label>
+                                <input type="number" id="weak-tokens" step="64" min="1" value="1024">
+                            </div>
+                        </div>
+                        <div id="weak-probe-status" style="font-size: 0.78rem; min-height: 18px;"></div>
+                        <div class="btn-row">
+                            <button class="btn-modal" onclick="testAgentProbe('weak')">Test Connection</button>
+                            <button class="btn-modal primary" onclick="saveAgentSettings('weak')">Save Config</button>
+                        </div>
+                    </div>
 
-            <div class="agent-grid">
-                <!-- Weak Agent Config -->
-                <div class="agent-card-config weak">
-                    <h3>
-                        <span>🟢 Weak Agent</span>
-                        <span style="font-size: 0.72rem; color: var(--text-sub);">Simple, fast, low-cost</span>
-                    </h3>
-                    <div class="form-group">
-                        <label>Provider</label>
-                        <select id="weak-provider" onchange="updateModelPresets('weak')">
-                            <option value="groq">Groq (Ultra-fast & cheap)</option>
-                            <option value="openai">OpenAI</option>
-                            <option value="google">Google Gemini</option>
-                            <option value="anthropic">Anthropic</option>
-                            <option value="openai_compatible">Custom / OpenAI-Compatible</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>API Key</label>
-                        <input type="password" id="weak-key" placeholder="Enter API key...">
-                    </div>
-                    <div class="form-group">
-                        <label>Model ID</label>
-                        <input type="text" id="weak-model" list="weak-models-list" placeholder="e.g. openai/gpt-oss-120b or llama-3.1-8b-instant" value="openai/gpt-oss-120b">
-                        <datalist id="weak-models-list">
-                            <option value="openai/gpt-oss-120b">Groq: openai/gpt-oss-120b (OSS Reasoning)</option>
-                            <option value="llama-3.1-8b-instant">Groq: llama-3.1-8b-instant</option>
-                            <option value="gemma2-9b-it">Groq: gemma2-9b-it</option>
-                            <option value="gpt-4o-mini">OpenAI: gpt-4o-mini</option>
-                            <option value="gemini-1.5-flash">Google: gemini-1.5-flash</option>
-                            <option value="claude-3-haiku-20240307">Anthropic: claude-3-haiku</option>
-                        </datalist>
-                        <div style="display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap;">
-                            <span class="chip" onclick="selectModelPreset('weak', 'openai/gpt-oss-120b', 1.0, 2048)">⚡ openai/gpt-oss-120b</span>
-                            <span class="chip" onclick="selectModelPreset('weak', 'llama-3.1-8b-instant', 0.2, 1024)">llama-3.1-8b</span>
-                            <span class="chip" onclick="selectModelPreset('weak', 'gpt-4o-mini', 0.2, 1024)">gpt-4o-mini</span>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Custom Base URL (Optional)</label>
-                        <input type="text" id="weak-base-url" placeholder="https://api.groq.com/openai/v1">
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <!-- Strong Agent Configuration -->
+                    <div class="agent-card strong">
+                        <h4>
+                            <span>🟣 Strong Agent</span>
+                            <span style="font-size: 0.72rem; color: #c084fc;">Coding, architecture, reasoning</span>
+                        </h4>
                         <div class="form-group">
-                            <label>Temperature</label>
-                            <input type="number" id="weak-temp" step="0.1" min="0" max="2" value="0.2">
+                            <label>Provider</label>
+                            <select id="strong-provider" onchange="applyProviderDefaults('strong')">
+                                <option value="openai">OpenAI (GPT-4o)</option>
+                                <option value="anthropic">Anthropic (Claude 3.5 Sonnet)</option>
+                                <option value="google">Google Gemini</option>
+                                <option value="groq">Groq (Llama 3.3 70B)</option>
+                                <option value="openai_compatible">Custom / OpenAI-Compatible</option>
+                            </select>
                         </div>
                         <div class="form-group">
-                            <label>Max Tokens</label>
-                            <input type="number" id="weak-tokens" step="64" min="1" value="1024">
-                        </div>
-                    </div>
-                    <div id="weak-test-status" style="font-size: 0.78rem; min-height: 18px;"></div>
-                    <div style="display: flex; gap: 8px; margin-top: 6px;">
-                        <button class="control-btn" style="flex: 1;" onclick="testAgentConnection('weak')">Test Connection</button>
-                        <button class="control-btn primary" style="flex: 1;" onclick="saveAgentConfig('weak')">Save Config</button>
-                    </div>
-                </div>
-
-                <!-- Strong Agent Config -->
-                <div class="agent-card-config strong">
-                    <h3>
-                        <span>🟣 Strong Agent</span>
-                        <span style="font-size: 0.72rem; color: var(--text-sub);">Reasoning, architecture, code</span>
-                    </h3>
-                    <div class="form-group">
-                        <label>Provider</label>
-                        <select id="strong-provider" onchange="updateModelPresets('strong')">
-                            <option value="openai">OpenAI (GPT-4o)</option>
-                            <option value="anthropic">Anthropic (Claude 3.5 Sonnet)</option>
-                            <option value="google">Google Gemini (Gemini 1.5 Pro)</option>
-                            <option value="groq">Groq (Llama 3.3 70B)</option>
-                            <option value="openai_compatible">Custom / OpenAI-Compatible</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>API Key</label>
-                        <input type="password" id="strong-key" placeholder="Enter API key...">
-                    </div>
-                    <div class="form-group">
-                        <label>Model ID</label>
-                        <input type="text" id="strong-model" list="strong-models-list" placeholder="e.g. gpt-4o or llama-3.3-70b-versatile" value="gpt-4o">
-                        <datalist id="strong-models-list">
-                            <option value="gpt-4o">OpenAI: gpt-4o</option>
-                            <option value="claude-3-5-sonnet-20241022">Anthropic: claude-3-5-sonnet</option>
-                            <option value="gemini-1.5-pro">Google: gemini-1.5-pro</option>
-                            <option value="llama-3.3-70b-versatile">Groq: llama-3.3-70b-versatile</option>
-                            <option value="deepseek-r1-distill-llama-70b">Groq: deepseek-r1-distill-llama-70b</option>
-                            <option value="openai/gpt-oss-120b">Groq: openai/gpt-oss-120b</option>
-                        </datalist>
-                        <div style="display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap;">
-                            <span class="chip" onclick="selectModelPreset('strong', 'gpt-4o', 0.2, 2048)">gpt-4o</span>
-                            <span class="chip" onclick="selectModelPreset('strong', 'llama-3.3-70b-versatile', 0.2, 2048)">llama-3.3-70b</span>
-                            <span class="chip" onclick="selectModelPreset('strong', 'deepseek-r1-distill-llama-70b', 0.6, 2048)">deepseek-r1</span>
-                            <span class="chip" onclick="selectModelPreset('strong', 'openai/gpt-oss-120b', 1.0, 2048)">openai/gpt-oss-120b</span>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>Custom Base URL (Optional)</label>
-                        <input type="text" id="strong-base-url" placeholder="https://api.openai.com/v1">
-                    </div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                        <div class="form-group">
-                            <label>Temperature</label>
-                            <input type="number" id="strong-temp" step="0.1" min="0" max="2" value="0.2">
+                            <label>Model ID</label>
+                            <input type="text" id="strong-model" value="gpt-4o" placeholder="Model alias">
+                            <div class="preset-chips-row">
+                                <span class="preset-chip" onclick="setPresetModel('strong', 'gpt-4o', 0.2, 2048)">gpt-4o</span>
+                                <span class="preset-chip" onclick="setPresetModel('strong', 'claude-3-5-sonnet-20241022', 0.2, 2048)">claude-3.5</span>
+                                <span class="preset-chip" onclick="setPresetModel('strong', 'llama-3.3-70b-versatile', 0.2, 2048)">llama-3.3-70b</span>
+                                <span class="preset-chip" onclick="setPresetModel('strong', 'openai/gpt-oss-120b', 1.0, 2048)">openai/gpt-oss-120b</span>
+                            </div>
                         </div>
                         <div class="form-group">
-                            <label>Max Tokens</label>
-                            <input type="number" id="strong-tokens" step="128" min="1" value="2048">
+                            <label>API Key</label>
+                            <div class="key-input-container">
+                                <input type="password" id="strong-key" placeholder="Enter API key...">
+                                <button type="button" class="key-toggle-btn" onclick="togglePasswordVisibility('strong-key')">👁️</button>
+                            </div>
                         </div>
-                    </div>
-                    <div id="strong-test-status" style="font-size: 0.78rem; min-height: 18px;"></div>
-                    <div style="display: flex; gap: 8px; margin-top: 6px;">
-                        <button class="control-btn" style="flex: 1;" onclick="testAgentConnection('strong')">Test Connection</button>
-                        <button class="control-btn primary" style="flex: 1;" onclick="saveAgentConfig('strong')">Save Config</button>
+                        <div class="form-group">
+                            <label>Custom Base URL (Optional)</label>
+                            <input type="text" id="strong-base-url" placeholder="https://api.openai.com/v1">
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                            <div class="form-group">
+                                <label>Temperature</label>
+                                <input type="number" id="strong-temp" step="0.1" min="0" max="2" value="0.2">
+                            </div>
+                            <div class="form-group">
+                                <label>Max Tokens</label>
+                                <input type="number" id="strong-tokens" step="128" min="1" value="2048">
+                            </div>
+                        </div>
+                        <div id="strong-probe-status" style="font-size: 0.78rem; min-height: 18px;"></div>
+                        <div class="btn-row">
+                            <button class="btn-modal" onclick="testAgentProbe('strong')">Test Connection</button>
+                            <button class="btn-modal primary" onclick="saveAgentSettings('strong')">Save Config</button>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Analytics & Telemetry Modal -->
+    <!-- -------------------------------------------------------------
+         4. Telemetry & Analytics Modal
+         ------------------------------------------------------------- -->
     <div class="modal-overlay" id="analytics-modal">
         <div class="modal-card">
             <div class="modal-header">
                 <div>
-                    <h2>📊 Platform Telemetry & Analytics</h2>
-                    <p style="font-size: 0.8rem; color: var(--text-sub); margin-top: 4px;">Live metrics tracking execution volume, agent distribution, and cost savings.</p>
+                    <h3>📊 Telemetry & Cost Savings</h3>
+                    <div style="font-size: 0.78rem; color: var(--text-secondary);">Real-time tracking of requests, routing distribution, and financial savings.</div>
                 </div>
-                <button class="modal-close-btn" onclick="closeModal('analytics-modal')">&times;</button>
+                <button class="btn-icon" onclick="closeModal('analytics-modal')">✕</button>
             </div>
-            <div class="analytics-grid" id="analytics-metrics-grid">
-                <div class="metric-box">
-                    <span class="label">Total Requests</span>
-                    <span class="value" id="stat-total">0</span>
+            <div class="modal-body">
+                <div class="analytics-kpi-grid">
+                    <div class="kpi-card">
+                        <span class="kpi-label">Total Requests</span>
+                        <span class="kpi-val" id="stat-kpi-total">0</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Weak Agent Ratio</span>
+                        <span class="kpi-val" style="color: #34d399;" id="stat-kpi-weak">0%</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Strong Agent Ratio</span>
+                        <span class="kpi-val" style="color: #c084fc;" id="stat-kpi-strong">0%</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Cost Savings</span>
+                        <span class="kpi-val" style="color: #60a5fa;" id="stat-kpi-savings">0.0%</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Total Spend</span>
+                        <span class="kpi-val" id="stat-kpi-cost">$0.00</span>
+                    </div>
+                    <div class="kpi-card">
+                        <span class="kpi-label">Avg Latency</span>
+                        <span class="kpi-val" id="stat-kpi-latency">0ms</span>
+                    </div>
                 </div>
-                <div class="metric-box">
-                    <span class="label">Weak Agent Ratio</span>
-                    <span class="value" style="color: #34d399;" id="stat-weak-ratio">0%</span>
-                </div>
-                <div class="metric-box">
-                    <span class="label">Strong Agent Ratio</span>
-                    <span class="value" style="color: #c084fc;" id="stat-strong-ratio">0%</span>
-                </div>
-                <div class="metric-box">
-                    <span class="label">Cost Savings</span>
-                    <span class="value" style="color: #60a5fa;" id="stat-savings-pct">0.0%</span>
-                </div>
-                <div class="metric-box">
-                    <span class="label">Total Spend</span>
-                    <span class="value" id="stat-total-cost">$0.00</span>
-                </div>
-                <div class="metric-box">
-                    <span class="label">Average Latency</span>
-                    <span class="value" id="stat-avg-latency">0ms</span>
-                </div>
-            </div>
-            <div style="margin-top: 10px;">
-                <h4 style="font-size: 0.9rem; margin-bottom: 8px;">Execution Breakdown by Agent Tier</h4>
-                <div style="background: var(--card-sub); border: 1px solid var(--border); border-radius: 8px; padding: 12px; font-size: 0.82rem;" id="analytics-breakdown-text">
-                    Calculating breakdown...
+                <div id="stat-breakdown-details" style="background: #262626; border-radius: 8px; padding: 14px; font-size: 0.82rem; line-height: 1.6;">
+                    Calculating analytics breakdown...
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Execution History Modal -->
+    <!-- -------------------------------------------------------------
+         5. Execution History Modal
+         ------------------------------------------------------------- -->
     <div class="modal-overlay" id="history-modal">
         <div class="modal-card">
             <div class="modal-header">
                 <div>
-                    <h2>📜 Recent Execution History</h2>
-                    <p style="font-size: 0.8rem; color: var(--text-sub); margin-top: 4px;">Audited log of dispatched prompts, routing decisions, latency, and costs.</p>
+                    <h3>📜 Execution Audit History</h3>
+                    <div style="font-size: 0.78rem; color: var(--text-secondary);">Chronological trace of classified prompts, latency, and costs.</div>
                 </div>
-                <button class="modal-close-btn" onclick="closeModal('history-modal')">&times;</button>
+                <button class="btn-icon" onclick="closeModal('history-modal')">✕</button>
             </div>
-            <div id="history-list-container" style="max-height: 400px; overflow-y: auto; font-size: 0.82rem; display: flex; flex-direction: column; gap: 8px;">
+            <div class="modal-body" id="history-modal-list">
                 <em>Loading execution records...</em>
             </div>
         </div>
     </div>
 
+    <!-- -------------------------------------------------------------
+         6. Client-Side JavaScript
+         ------------------------------------------------------------- -->
     <script>
-        const chatContainer = document.getElementById('chat-container');
-        const userInput = document.getElementById('user-input');
-        const sendBtn = document.getElementById('send-btn');
-
+        // State
         let currentMode = 'adaptive';
-        let messageHistory = [];
+        let conversationMessages = [];
+        let isStreaming = false;
+        let abortController = null;
+        let sessionList = [];
 
-        function setMode(mode) {
+        const chatScrollArea = document.getElementById('chat-scroll-area');
+        const chatThread = document.getElementById('chat-thread');
+        const emptyHero = document.getElementById('empty-hero');
+        const userPrompt = document.getElementById('user-prompt');
+        const btnSubmit = document.getElementById('btn-submit');
+        const sidebar = document.getElementById('sidebar');
+
+        // Toggle Sidebar
+        function toggleSidebar() {
+            sidebar.classList.toggle('collapsed');
+        }
+
+        // Routing Mode Management
+        function setRoutingMode(mode) {
             currentMode = mode;
-            document.querySelectorAll('.mode-btn').forEach(btn => btn.classList.remove('active'));
-            if (mode === 'adaptive') document.getElementById('mode-adaptive').classList.add('active');
-            else if (mode === 'weak') document.getElementById('mode-weak').classList.add('active');
-            else if (mode === 'strong') document.getElementById('mode-strong').classList.add('active');
+            document.querySelectorAll('.mode-chip-btn').forEach(btn => btn.classList.remove('active'));
+            const activeBtn = document.getElementById(`mode-btn-${mode}`);
+            if (activeBtn) activeBtn.classList.add('active');
+
+            const navBadge = document.getElementById('nav-mode-badge');
+            const navText = document.getElementById('nav-mode-text');
+            if (mode === 'adaptive') {
+                navBadge.className = 'badge-pill adaptive';
+                navBadge.innerText = '🤖 Adaptive';
+                navText.innerText = 'Auto-Routing';
+            } else if (mode === 'weak') {
+                navBadge.className = 'badge-pill weak';
+                navBadge.innerText = '🟢 Weak Only';
+                navText.innerText = 'Low-Cost Tier';
+            } else if (mode === 'strong') {
+                navBadge.className = 'badge-pill strong';
+                navBadge.innerText = '🟣 Strong Only';
+                navText.innerText = 'Deep Reasoning';
+            }
         }
 
-        function setPrompt(text) {
-            userInput.value = text;
-            userInput.focus();
+        // Auto-Resize Textarea
+        function autoResizeTextarea(textarea) {
+            textarea.style.height = 'auto';
+            textarea.style.height = Math.min(textarea.scrollHeight, 180) + 'px';
+            btnSubmit.disabled = textarea.value.trim().length === 0;
         }
 
-        userInput.addEventListener('keydown', (e) => {
+        // Keyboard Shortcut: Enter to Send, Shift+Enter for New Line, Ctrl+K for New Chat
+        function handleTextareaKeydown(e) {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                sendMessage();
+                sendChatMessage();
+            }
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                e.preventDefault();
+                startNewChat();
             }
         });
 
-        function appendUserMessage(text) {
-            const div = document.createElement('div');
-            div.className = 'message user-message';
-            div.innerText = text;
-            chatContainer.appendChild(div);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+        // Start New Chat
+        function startNewChat() {
+            if (isStreaming && abortController) {
+                abortController.abort();
+            }
+            conversationMessages = [];
+            chatThread.innerHTML = '';
+            chatThread.appendChild(emptyHero);
+            emptyHero.style.display = 'flex';
+            userPrompt.value = '';
+            autoResizeTextarea(userPrompt);
+            userPrompt.focus();
         }
 
-        function appendGatewayMessage(reply, meta) {
-            const div = document.createElement('div');
-            div.className = 'message gateway-message';
+        // Quick Suggestion Click
+        function submitPrompt(text) {
+            userPrompt.value = text;
+            autoResizeTextarea(userPrompt);
+            sendChatMessage();
+        }
 
-            const agentClass = meta.agent === 'strong' ? 'badge-strong' : 'badge-weak';
-            const agentLabel = meta.agent === 'strong' ? '🟣 STRONG AGENT' : '🟢 WEAK AGENT';
-            const fallbackBadge = meta.routing && meta.routing.fallback_used
-                ? '<span class="badge badge-fallback">⚠️ Fallback Used</span>'
-                : '';
+        // Render Markdown safely
+        function renderMarkdown(text) {
+            if (typeof marked !== 'undefined' && marked.parse) {
+                try {
+                    return marked.parse(text);
+                } catch (e) {
+                    console.error("Marked parse error:", e);
+                }
+            }
+            // Fallback lightweight parser
+            let escaped = escapeHtml(text)
+                .replace(/```([a-z0-9_-]*)([\s\S]*?)```/g, (m, lang, code) => {
+                    return `<div class="code-block-wrapper"><div class="code-block-header"><span>${lang || 'code'}</span><button class="code-copy-btn" onclick="copyCode(this)">Copy code</button></div><pre><code>${code.trim()}</code></pre></div>`;
+                })
+                .replace(/`([^`]+)`/g, '<inline-code>$1</inline-code>')
+                .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+                .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+                .replace(/\n\n/g, '<p></p>')
+                .replace(/\n/g, '<br>');
+            return escaped;
+        }
 
-            const costStr = meta.cost !== undefined ? `$${meta.cost.toFixed(6)}` : 'N/A';
-            const tokens = meta.tokens || {};
-            const tokenStr = `In: ${tokens.prompt || 0} • Out: ${tokens.completion || 0} • Total: ${tokens.total || 0}`;
-
-            div.innerHTML = `
-                <div class="gateway-header">
-                    <div class="meta-badges">
-                        <span class="badge ${agentClass}">${agentLabel}</span>
-                        <span class="badge badge-info">${meta.provider || ''} (${meta.model || ''})</span>
-                        ${fallbackBadge}
-                    </div>
-                    <div style="font-size: 0.78rem; color: var(--text-sub); font-family: monospace;">
-                        ⚡ ${meta.latency_ms || 0}ms • 💰 ${costStr}
-                    </div>
-                </div>
-                <div class="gateway-body">
-                    <div class="message-content">${escapeHtml(reply)}</div>
-                    <div class="meta-details">
-                        <div><strong>Routing Reason:</strong> ${meta.routing ? meta.routing.reason : 'Automated dispatch'}</div>
-                        <div class="meta-stats">
-                            <span>Complexity: <strong>${meta.routing ? meta.routing.complexity : 1}/5</strong></span>
-                            <span>Confidence: <strong>${meta.routing ? Math.round((meta.routing.confidence || 0) * 100) : 100}%</strong></span>
-                            <span>Tokens: <strong>${tokenStr}</strong></span>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            chatContainer.appendChild(div);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+        // Code Copy Helper
+        function copyCode(btn) {
+            const pre = btn.closest('.code-block-wrapper').querySelector('pre');
+            if (!pre) return;
+            const code = pre.innerText;
+            navigator.clipboard.writeText(code).then(() => {
+                const orig = btn.innerText;
+                btn.innerText = '✔ Copied!';
+                setTimeout(() => { btn.innerText = orig; }, 2000);
+            });
         }
 
         function escapeHtml(text) {
             const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
-            return text.replace(/[&<>"']/g, m => map[m]);
+            return String(text).replace(/[&<>"']/g, m => map[m]);
         }
 
-        async function sendMessage() {
-            const text = userInput.value.trim();
-            if (!text) return;
+        // Append User Message to Thread
+        function appendUserMessage(text) {
+            emptyHero.style.display = 'none';
+            const row = document.createElement('div');
+            row.className = 'message-row user';
+            row.innerHTML = `<div class="user-bubble">${escapeHtml(text)}</div>`;
+            chatThread.appendChild(row);
+            scrollToBottom();
+        }
+
+        // Append Assistant Message with Streaming / Thinking placeholder
+        function createAssistantMessageSlot() {
+            emptyHero.style.display = 'none';
+            const row = document.createElement('div');
+            row.className = 'message-row assistant';
+
+            const avatar = document.createElement('div');
+            avatar.className = 'assistant-avatar weak';
+            avatar.innerText = '⚡';
+
+            const body = document.createElement('div');
+            body.className = 'assistant-body';
+
+            const metaHeader = document.createElement('div');
+            metaHeader.className = 'assistant-meta-header';
+            metaHeader.innerHTML = `
+                <span class="agent-badge-inline weak">Routing...</span>
+                <span class="assistant-model-tag" style="color:var(--text-muted);">Analyzing prompt complexity</span>
+            `;
+
+            const contentDiv = document.createElement('div');
+            contentDiv.className = 'markdown-content';
+            contentDiv.innerHTML = `
+                <div class="thinking-indicator">
+                    <span class="pulse-dot"></span>
+                    <span class="pulse-dot"></span>
+                    <span class="pulse-dot"></span>
+                    <span style="font-size:0.84rem; color:var(--text-muted); margin-left:4px;">Routing to agent...</span>
+                </div>
+            `;
+
+            const detailsWrapper = document.createElement('div');
+            detailsWrapper.className = 'routing-details-accordion';
+            detailsWrapper.style.display = 'none';
+
+            body.appendChild(metaHeader);
+            body.appendChild(contentDiv);
+            body.appendChild(detailsWrapper);
+
+            row.appendChild(avatar);
+            row.appendChild(body);
+            chatThread.appendChild(row);
+            scrollToBottom();
+
+            return {
+                row,
+                avatar,
+                metaHeader,
+                contentDiv,
+                detailsWrapper,
+            };
+        }
+
+        function scrollToBottom() {
+            chatScrollArea.scrollTop = chatScrollArea.scrollHeight;
+        }
+
+        // Main Send Function with Real-Time SSE Streaming
+        async function sendChatMessage() {
+            const text = userPrompt.value.trim();
+            if (!text || isStreaming) return;
 
             appendUserMessage(text);
-            userInput.value = '';
-            userInput.disabled = true;
-            sendBtn.disabled = true;
-            sendBtn.innerHTML = '<span class="spinner"></span> Executing...';
+            userPrompt.value = '';
+            autoResizeTextarea(userPrompt);
 
-            messageHistory.push({ role: 'user', content: text });
+            btnSubmit.disabled = true;
+            btnSubmit.innerHTML = '<span class="spinner"></span>';
+            isStreaming = true;
+
+            const slot = createAssistantMessageSlot();
+            conversationMessages.push({ role: 'user', content: text });
+
+            abortController = new AbortController();
+
+            let fullReply = '';
+            let routingMeta = null;
+            let usageMeta = null;
 
             try {
-                const res = await fetch('/api/gateway/execute', {
+                const response = await fetch('/api/gateway/stream', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-User-ID': 'default_user' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-User-ID': 'default_user'
+                    },
                     body: JSON.stringify({
                         prompt: text,
                         mode: currentMode,
-                        conversation_history: messageHistory.slice(-6),
-                    })
+                        conversation_history: conversationMessages.slice(-6)
+                    }),
+                    signal: abortController.signal
                 });
 
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.success) {
-                        messageHistory.push({ role: 'assistant', content: data.response });
-                        appendGatewayMessage(data.response, data);
-                    } else {
-                        appendErrorMessage(`Execution failure: ${data.error}`);
-                    }
-                } else {
-                    const err = await res.json();
-                    appendErrorMessage(`Gateway Error: ${err.detail || (err.error ? err.error.message : res.statusText)}`);
+                if (!response.ok) {
+                    throw new Error(`Gateway returned HTTP ${response.status}: ${response.statusText}`);
                 }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n\n');
+                    buffer = lines.pop(); // Keep incomplete trailing fragment
+
+                    for (const line of lines) {
+                        const trimmed = line.trim();
+                        if (trimmed.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(trimmed.slice(6));
+                                if (data.type === 'routing') {
+                                    routingMeta = data.routing;
+                                    const agentType = data.agent || (routingMeta ? routingMeta.agent : 'weak');
+                                    slot.avatar.className = `assistant-avatar ${agentType}`;
+                                    slot.avatar.innerText = agentType === 'strong' ? '🟣' : '🟢';
+
+                                    const badgeLabel = agentType === 'strong' ? '🟣 STRONG AGENT' : '🟢 WEAK AGENT';
+                                    slot.metaHeader.innerHTML = `
+                                        <span class="agent-badge-inline ${agentType}">${badgeLabel}</span>
+                                        <span class="assistant-model-tag">${routingMeta ? routingMeta.reason : 'Optimal model selected'}</span>
+                                    `;
+                                    slot.contentDiv.innerHTML = '<span class="cursor-blink"></span>';
+                                } else if (data.type === 'token') {
+                                    fullReply += data.content;
+                                    // Live preview while streaming
+                                    slot.contentDiv.innerHTML = renderMarkdown(fullReply) + '<span class="cursor-blink"></span>';
+                                    scrollToBottom();
+                                } else if (data.type === 'done') {
+                                    usageMeta = data;
+                                }
+                            } catch (parseErr) {
+                                console.warn("Failed to parse SSE payload:", parseErr);
+                            }
+                        }
+                    }
+                }
+
+                // Finalize Rendered Content
+                slot.contentDiv.innerHTML = renderMarkdown(fullReply);
+                decorateCodeBlocks(slot.contentDiv);
+
+                if (fullReply) {
+                    conversationMessages.push({ role: 'assistant', content: fullReply });
+                }
+
+                // Finalize Metadata Header & Accordion
+                const latency = usageMeta ? usageMeta.latency_ms : 0;
+                const cost = usageMeta && usageMeta.cost !== undefined ? `$${Number(usageMeta.cost).toFixed(6)}` : '';
+                const agent = usageMeta ? usageMeta.agent : (routingMeta ? routingMeta.agent : 'weak');
+
+                slot.metaHeader.innerHTML = `
+                    <span class="agent-badge-inline ${agent}">${agent === 'strong' ? '🟣 STRONG AGENT' : '🟢 WEAK AGENT'}</span>
+                    <span style="font-family: var(--font-mono); color: var(--text-muted); font-size: 0.74rem;">⚡ ${latency}ms ${cost ? '• 💰 ' + cost : ''}</span>
+                `;
+
+                // Add Accordion
+                if (routingMeta || usageMeta) {
+                    slot.detailsWrapper.style.display = 'block';
+                    const tokens = usageMeta && usageMeta.tokens ? usageMeta.tokens : {};
+                    slot.detailsWrapper.innerHTML = `
+                        <button class="routing-details-toggle" onclick="toggleDetails(this)">
+                            <span>▸</span>
+                            <span>Routing Intelligence Details</span>
+                        </button>
+                        <div class="routing-details-content" style="display:none;">
+                            <div><strong>Routing Decision:</strong> ${routingMeta ? routingMeta.reason : 'Automated dispatch'}</div>
+                            <div class="routing-details-stats">
+                                <span>Complexity: <strong>${routingMeta ? routingMeta.complexity : 1}/5</strong></span>
+                                <span>Confidence: <strong>${routingMeta ? Math.round((routingMeta.confidence || 1) * 100) : 100}%</strong></span>
+                                <span>Tokens: In: <strong>${tokens.prompt || 0}</strong> • Out: <strong>${tokens.completion || 0}</strong> • Total: <strong>${tokens.total || 0}</strong></span>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Add to sidebar session history
+                addToSidebarHistory(text);
+
             } catch (err) {
-                appendErrorMessage(`Network transport error: ${err.message}`);
+                console.error("Execution error:", err);
+                slot.metaHeader.innerHTML = `<span class="agent-badge-inline" style="background:rgba(239,68,68,0.2); color:#ef4444; border:1px solid rgba(239,68,68,0.4);">⚠️ Execution Failure</span>`;
+                slot.contentDiv.innerHTML = `<div style="color:var(--danger); font-size:0.9rem;">${escapeHtml(err.message)}</div>`;
             } finally {
-                userInput.disabled = false;
-                sendBtn.disabled = false;
-                sendBtn.innerText = 'Send';
-                userInput.focus();
+                isStreaming = false;
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = '<span id="btn-icon-content">↑</span>';
+                userPrompt.focus();
                 loadAgentStatus();
             }
         }
 
-        function appendErrorMessage(msg) {
-            const div = document.createElement('div');
-            div.className = 'message gateway-message';
-            div.innerHTML = `<div class="gateway-body" style="color: var(--danger); font-size: 0.9rem;">⚠️ ${escapeHtml(msg)}</div>`;
-            chatContainer.appendChild(div);
-            chatContainer.scrollTop = chatContainer.scrollHeight;
+        // Decorate Code Blocks with Language Header & Copy Button
+        function decorateCodeBlocks(container) {
+            const pres = container.querySelectorAll('pre');
+            pres.forEach(pre => {
+                if (pre.parentElement.classList.contains('code-block-wrapper')) return;
+                const code = pre.querySelector('code');
+                let lang = 'code';
+                if (code && code.className) {
+                    const m = code.className.match(/language-([a-z0-9_-]+)/i);
+                    if (m) lang = m[1];
+                }
+                const wrapper = document.createElement('div');
+                wrapper.className = 'code-block-wrapper';
+                wrapper.innerHTML = `
+                    <div class="code-block-header">
+                        <span>${lang}</span>
+                        <button class="code-copy-btn" onclick="copyCode(this)">Copy code</button>
+                    </div>
+                `;
+                pre.parentNode.insertBefore(wrapper, pre);
+                wrapper.appendChild(pre);
+            });
         }
 
-        // --- Modals Management ---
+        // Toggle Details Accordion
+        function toggleDetails(btn) {
+            const content = btn.nextElementSibling;
+            const arrow = btn.querySelector('span:first-child');
+            if (content.style.display === 'none' || !content.style.display) {
+                content.style.display = 'flex';
+                arrow.innerText = '▾';
+            } else {
+                content.style.display = 'none';
+                arrow.innerText = '▸';
+            }
+        }
+
+        // Sidebar History Helpers
+        function addToSidebarHistory(prompt) {
+            const list = document.getElementById('sidebar-history-list');
+            if (sessionList.length === 0) {
+                list.innerHTML = '';
+            }
+            sessionList.push(prompt);
+            const item = document.createElement('div');
+            item.className = 'history-item';
+            item.innerText = prompt;
+            item.onclick = () => {
+                userPrompt.value = prompt;
+                autoResizeTextarea(userPrompt);
+                userPrompt.focus();
+            };
+            list.prepend(item);
+        }
+
+        // -------------------------------------------------------------
+        // Modals Management
+        // -------------------------------------------------------------
         function openModal(id) { document.getElementById(id).style.display = 'flex'; }
         function closeModal(id) { document.getElementById(id).style.display = 'none'; }
 
-        document.getElementById('agents-config-btn').onclick = () => { openModal('agents-modal'); loadAgentSettings(); };
-        document.getElementById('analytics-btn').onclick = () => { openModal('analytics-modal'); loadAnalytics(); };
-        document.getElementById('history-btn').onclick = () => { openModal('history-modal'); loadHistory(); };
+        // Close on background click
+        window.onclick = function(event) {
+            if (event.target.classList.contains('modal-overlay')) {
+                event.target.style.display = 'none';
+            }
+        };
 
-        // Model selection helper
-        function selectModelPreset(agent, model, temp, tokens) {
+        // Password Show/Hide Toggle
+        function togglePasswordVisibility(id) {
+            const el = document.getElementById(id);
+            el.type = el.type === 'password' ? 'text' : 'password';
+        }
+
+        // Agent Preset Helper
+        function setPresetModel(agent, model, temp, tokens) {
             document.getElementById(`${agent}-model`).value = model;
             if (temp !== undefined) document.getElementById(`${agent}-temp`).value = temp;
             if (tokens !== undefined) document.getElementById(`${agent}-tokens`).value = tokens;
         }
 
-        // Provider presets helper
-        function updateModelPresets(agent) {
+        // Provider Defaults
+        function applyProviderDefaults(agent) {
             const provider = document.getElementById(`${agent}-provider`).value;
             const modelInput = document.getElementById(`${agent}-model`);
             const baseInput = document.getElementById(`${agent}-base-url`);
@@ -852,6 +1864,7 @@ Click <strong>⚙️ Agent Settings</strong> above to configure your provider AP
             }
         }
 
+        // Load Active Agent Status into Sidebar
         async function loadAgentStatus() {
             try {
                 const res = await fetch('/api/agents/config', { headers: { 'X-User-ID': 'default_user' } });
@@ -860,24 +1873,29 @@ Click <strong>⚙️ Agent Settings</strong> above to configure your provider AP
                     const weak = data.agents && data.agents.weak;
                     const strong = data.agents && data.agents.strong;
 
-                    const weakEl = document.getElementById('weak-status-text');
-                    const strongEl = document.getElementById('strong-status-text');
+                    const weakEl = document.getElementById('sidebar-weak-model');
+                    const strongEl = document.getElementById('sidebar-strong-model');
 
                     if (weak && weak.is_enabled) {
-                        weakEl.innerText = `${weak.provider.toUpperCase()} (${weak.model_id})`;
+                        weakEl.innerText = `${weak.provider}/${weak.model_id}`;
+                        weakEl.style.color = '#34d399';
                     } else {
                         weakEl.innerText = 'Not Configured';
+                        weakEl.style.color = 'var(--text-muted)';
                     }
 
                     if (strong && strong.is_enabled) {
-                        strongEl.innerText = `${strong.provider.toUpperCase()} (${strong.model_id})`;
+                        strongEl.innerText = `${strong.provider}/${strong.model_id}`;
+                        strongEl.style.color = '#c084fc';
                     } else {
                         strongEl.innerText = 'Not Configured';
+                        strongEl.style.color = 'var(--text-muted)';
                     }
                 }
             } catch (e) {}
         }
 
+        // Load Settings into Modal
         async function loadAgentSettings() {
             try {
                 const res = await fetch('/api/agents/config', { headers: { 'X-User-ID': 'default_user' } });
@@ -906,21 +1924,22 @@ Click <strong>⚙️ Agent Settings</strong> above to configure your provider AP
             } catch (e) {}
         }
 
-        async function saveAgentConfig(agent) {
+        // Save Agent Config
+        async function saveAgentSettings(agent) {
             const provider = document.getElementById(`${agent}-provider`).value;
             const api_key = document.getElementById(`${agent}-key`).value.trim();
             const model_id = document.getElementById(`${agent}-model`).value.trim();
             const base_url = document.getElementById(`${agent}-base-url`).value.trim() || null;
             const temperature = parseFloat(document.getElementById(`${agent}-temp`).value) || 0.2;
             const max_tokens = parseInt(document.getElementById(`${agent}-tokens`).value) || 1024;
-            const statusDiv = document.getElementById(`${agent}-test-status`);
+            const statusDiv = document.getElementById(`${agent}-probe-status`);
 
             if (!api_key && document.getElementById(`${agent}-key`).placeholder.includes('Enter')) {
                 statusDiv.innerHTML = '<span style="color:var(--danger)">Please enter an API Key.</span>';
                 return;
             }
 
-            statusDiv.innerHTML = '<span style="color:var(--text-sub)">Saving encrypted configuration...</span>';
+            statusDiv.innerHTML = '<span style="color:var(--text-secondary)">Saving encrypted configuration...</span>';
 
             try {
                 const res = await fetch('/api/agents/configure', {
@@ -939,7 +1958,7 @@ Click <strong>⚙️ Agent Settings</strong> above to configure your provider AP
                 });
 
                 if (res.ok) {
-                    statusDiv.innerHTML = '<span style="color:var(--success)">✔ Configuration saved and encrypted securely.</span>';
+                    statusDiv.innerHTML = '<span style="color:var(--accent-weak)">✔ Configuration securely encrypted & saved.</span>';
                     document.getElementById(`${agent}-key`).value = '';
                     loadAgentStatus();
                     loadAgentSettings();
@@ -952,14 +1971,15 @@ Click <strong>⚙️ Agent Settings</strong> above to configure your provider AP
             }
         }
 
-        async function testAgentConnection(agent) {
+        // Test Agent Connection Probe
+        async function testAgentProbe(agent) {
             const provider = document.getElementById(`${agent}-provider`).value;
             const api_key = document.getElementById(`${agent}-key`).value.trim();
             const model_id = document.getElementById(`${agent}-model`).value.trim();
             const base_url = document.getElementById(`${agent}-base-url`).value.trim() || null;
-            const statusDiv = document.getElementById(`${agent}-test-status`);
+            const statusDiv = document.getElementById(`${agent}-probe-status`);
 
-            statusDiv.innerHTML = '<span style="color:var(--primary)"><span class="spinner"></span> Testing connection...</span>';
+            statusDiv.innerHTML = '<span style="color:#60a5fa;"><span class="spinner"></span> Testing connection probe...</span>';
 
             try {
                 const res = await fetch('/api/agents/test', {
@@ -976,7 +1996,7 @@ Click <strong>⚙️ Agent Settings</strong> above to configure your provider AP
 
                 const data = await res.json();
                 if (data.success) {
-                    statusDiv.innerHTML = `<span style="color:var(--success)">✔ Connected in ${data.latency_ms}ms! Probe response received.</span>`;
+                    statusDiv.innerHTML = `<span style="color:var(--accent-weak)">✔ Connected in ${data.latency_ms}ms! Real probe response received.</span>`;
                 } else {
                     statusDiv.innerHTML = `<span style="color:var(--danger)">✖ Connection failed: ${data.error || 'Unknown error'}</span>`;
                 }
@@ -985,55 +2005,57 @@ Click <strong>⚙️ Agent Settings</strong> above to configure your provider AP
             }
         }
 
+        // Analytics Overview
         async function loadAnalytics() {
             try {
                 const res = await fetch('/api/analytics/overview');
                 if (res.ok) {
                     const d = await res.json();
-                    document.getElementById('stat-total').innerText = d.total_requests;
-                    document.getElementById('stat-weak-ratio').innerText = `${Math.round((d.routing_distribution.weak || 0) * 100)}% (${d.weak_agent_requests})`;
-                    document.getElementById('stat-strong-ratio').innerText = `${Math.round((d.routing_distribution.strong || 0) * 100)}% (${d.strong_agent_requests})`;
-                    document.getElementById('stat-savings-pct').innerText = `${d.cost_savings_pct}%`;
-                    document.getElementById('stat-total-cost').innerText = `$${d.estimated_total_cost.toFixed(4)}`;
-                    document.getElementById('stat-avg-latency').innerText = `${d.avg_latency_ms}ms`;
+                    document.getElementById('stat-kpi-total').innerText = d.total_requests;
+                    document.getElementById('stat-kpi-weak').innerText = `${Math.round((d.routing_distribution.weak || 0) * 100)}% (${d.weak_agent_requests})`;
+                    document.getElementById('stat-kpi-strong').innerText = `${Math.round((d.routing_distribution.strong || 0) * 100)}% (${d.strong_agent_requests})`;
+                    document.getElementById('stat-kpi-savings').innerText = `${d.cost_savings_pct}%`;
+                    document.getElementById('stat-kpi-cost').innerText = `$${d.estimated_total_cost.toFixed(4)}`;
+                    document.getElementById('stat-kpi-latency').innerText = `${d.avg_latency_ms}ms`;
 
-                    document.getElementById('analytics-breakdown-text').innerHTML = `
+                    document.getElementById('stat-breakdown-details').innerHTML = `
                         Total prompt & completion tokens processed: <strong>${d.total_tokens.toLocaleString()}</strong><br>
-                        Estimated savings vs Always-Strong baseline: <strong>$${d.estimated_savings_usd.toFixed(4)} USD</strong> (${d.cost_savings_pct}% saved)<br>
+                        Financial savings compared to Always-Strong baseline: <strong style="color:#60a5fa;">$${d.estimated_savings_usd.toFixed(4)} USD</strong> (${d.cost_savings_pct}% saved)<br>
                         Execution success rate: <strong>${Math.round(d.success_rate * 100)}%</strong>
                     `;
                 }
             } catch (e) {}
         }
 
+        // History Audit
         async function loadHistory() {
-            const container = document.getElementById('history-list-container');
-            container.innerHTML = '<em>Fetching records...</em>';
+            const container = document.getElementById('history-modal-list');
+            container.innerHTML = '<em>Fetching execution audit records...</em>';
             try {
                 const res = await fetch('/api/gateway/history?limit=25');
                 if (res.ok) {
                     const list = await res.json();
                     if (!list || list.length === 0) {
-                        container.innerHTML = '<em>No executions recorded yet. Submit a prompt in the playground!</em>';
+                        container.innerHTML = '<em>No executions recorded yet. Submit a prompt in the chat!</em>';
                         return;
                     }
                     container.innerHTML = list.map(item => `
-                        <div style="background: var(--card-sub); border: 1px solid var(--border); border-radius: 6px; padding: 10px;">
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
+                        <div style="background: #262626; border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px; margin-bottom: 8px;">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
                                 <span><strong style="color: ${item.agent === 'strong' ? '#c084fc' : '#34d399'};">${item.agent.toUpperCase()} AGENT</strong> • ${item.provider} (${item.model})</span>
-                                <span style="font-family: monospace;">⚡ ${item.latency_ms}ms • 💰 $${item.cost.toFixed(6)}</span>
+                                <span style="font-family: var(--font-mono); font-size: 0.78rem;">⚡ ${item.latency_ms}ms • 💰 $${item.cost.toFixed(6)}</span>
                             </div>
-                            <div style="color: var(--text-sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                            <div style="color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.85rem;">
                                 <strong>Prompt:</strong> ${escapeHtml(item.prompt)}
                             </div>
-                            <div style="font-size: 0.74rem; color: #64748b; margin-top: 4px;">
-                                Tokens: ${item.tokens ? item.tokens.total : 0} • Complexity: ${item.routing ? item.routing.complexity : 1}/5
+                            <div style="font-size: 0.74rem; color: var(--text-muted); margin-top: 4px;">
+                                Tokens: ${item.tokens ? item.tokens.total : 0} • Complexity: ${item.routing ? item.routing.complexity : 1}/5 • Reason: ${item.routing ? item.routing.reason : 'Automated dispatch'}
                             </div>
                         </div>
                     `).join('');
                 }
             } catch (e) {
-                container.innerHTML = '<em>Failed to load history.</em>';
+                container.innerHTML = '<em>Failed to load history records.</em>';
             }
         }
 

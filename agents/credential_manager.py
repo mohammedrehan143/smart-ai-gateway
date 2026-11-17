@@ -212,6 +212,12 @@ class CredentialManager:
         cfg = self._configs.get((user_id, agent_type.lower()))
         if cfg:
             return cfg
+
+        # If user_id is default/anonymous, check if any enabled config exists in memory
+        if user_id in ("default_user", "anonymous", ""):
+            for (uid, at), c in self._configs.items():
+                if at == agent_type.lower() and c.is_enabled:
+                    return c
         
         # Check SQLite if not in memory
         conn = self._get_connection()
@@ -228,6 +234,18 @@ class CredentialManager:
                         (user_id, agent_type.lower()),
                     )
                     row = cursor.fetchone()
+                    if not row and user_id in ("default_user", "anonymous", ""):
+                        cursor = conn.execute(
+                            """
+                            SELECT user_id, agent_type, provider, encrypted_key, model_id,
+                                   base_url, temperature, max_tokens, is_enabled, created_at, updated_at
+                            FROM agent_configurations
+                            WHERE agent_type = ? AND is_enabled = 1
+                            ORDER BY updated_at DESC LIMIT 1
+                            """,
+                            (agent_type.lower(),),
+                        )
+                        row = cursor.fetchone()
                     if row:
                         cfg = AgentConfig(
                             user_id=row["user_id"],
