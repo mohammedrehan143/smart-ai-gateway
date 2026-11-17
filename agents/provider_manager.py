@@ -170,17 +170,40 @@ class ProviderManager:
         # Standard OpenAI-compatible format (OpenAI, Groq, Google OpenAI endpoint, Custom)
         url = f"{resolved_base}/chat/completions"
         headers = self._build_headers(p, api_key)
-        payload = {
+        
+        is_modern_or_reasoning = (
+            "openai/" in model_id.lower()
+            or "gpt-oss" in model_id.lower()
+            or model_id.lower().startswith("o1")
+            or model_id.lower().startswith("o3")
+            or "deepseek-r1" in model_id.lower()
+        )
+
+        payload: Dict[str, Any] = {
             "model": model_id,
             "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
             "stream": False,
         }
+        if is_modern_or_reasoning:
+            payload["max_completion_tokens"] = max_tokens
+            if "gpt-oss" in model_id.lower() or "openai/" in model_id.lower():
+                payload["reasoning_effort"] = "medium"
+            if temperature is not None:
+                payload["temperature"] = temperature
+        else:
+            payload["max_tokens"] = max_tokens
+            if temperature is not None:
+                payload["temperature"] = temperature
 
         async with httpx.AsyncClient(timeout=timeout) as client:
             try:
                 response = await client.post(url, json=payload, headers=headers)
+                # Auto-recovery: If provider rejects max_tokens in favor of max_completion_tokens
+                if response.status_code == 400 and ("max_completion_tokens" in response.text or "max_tokens" in response.text):
+                    if "max_tokens" in payload:
+                        payload.pop("max_tokens", None)
+                        payload["max_completion_tokens"] = max_tokens
+                        response = await client.post(url, json=payload, headers=headers)
             except httpx.TimeoutException as te:
                 raise RequestTimeoutError(f"Request to {p} timed out after {timeout}s") from te
             except httpx.RequestError as re:
@@ -193,7 +216,13 @@ class ProviderManager:
         if not choices:
             raise ProviderServerError(f"Malformed response from {p}: no choices array returned")
 
-        content = choices[0].get("message", {}).get("content", "") or ""
+        first_msg = choices[0].get("message", {})
+        content = (
+            first_msg.get("content")
+            or first_msg.get("reasoning")
+            or first_msg.get("reasoning_content")
+            or ""
+        )
         finish_reason = choices[0].get("finish_reason", "stop")
         usage = data.get("usage", {})
         prompt_tokens = usage.get("prompt_tokens", 0)
@@ -293,13 +322,30 @@ class ProviderManager:
         resolved_base = self.resolve_base_url(p, base_url)
         url = f"{resolved_base}/chat/completions"
         headers = self._build_headers(p, api_key)
-        payload = {
+
+        is_modern_or_reasoning = (
+            "openai/" in model_id.lower()
+            or "gpt-oss" in model_id.lower()
+            or model_id.lower().startswith("o1")
+            or model_id.lower().startswith("o3")
+            or "deepseek-r1" in model_id.lower()
+        )
+
+        payload: Dict[str, Any] = {
             "model": model_id,
             "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
             "stream": True,
         }
+        if is_modern_or_reasoning:
+            payload["max_completion_tokens"] = max_tokens
+            if "gpt-oss" in model_id.lower() or "openai/" in model_id.lower():
+                payload["reasoning_effort"] = "medium"
+            if temperature is not None:
+                payload["temperature"] = temperature
+        else:
+            payload["max_tokens"] = max_tokens
+            if temperature is not None:
+                payload["temperature"] = temperature
 
         async with httpx.AsyncClient(timeout=timeout) as client:
             async with client.stream("POST", url, json=payload, headers=headers) as resp:

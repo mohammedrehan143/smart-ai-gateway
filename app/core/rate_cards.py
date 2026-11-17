@@ -73,6 +73,38 @@ class RateCardCatalog:
                 output_rate_per_million=0.30,
                 version=version,
             ),
+            "openai/gpt-oss-120b": RateCardEntry(
+                rate_card_id=f"rc_groq_gptoss120b_{version}",
+                model_alias="openai/gpt-oss-120b",
+                provider="groq",
+                input_rate_per_million=0.15,
+                output_rate_per_million=0.60,
+                version=version,
+            ),
+            "llama-3.1-8b-instant": RateCardEntry(
+                rate_card_id=f"rc_groq_llama31_8b_{version}",
+                model_alias="llama-3.1-8b-instant",
+                provider="groq",
+                input_rate_per_million=0.05,
+                output_rate_per_million=0.08,
+                version=version,
+            ),
+            "llama-3.3-70b-versatile": RateCardEntry(
+                rate_card_id=f"rc_groq_llama33_70b_{version}",
+                model_alias="llama-3.3-70b-versatile",
+                provider="groq",
+                input_rate_per_million=0.59,
+                output_rate_per_million=0.79,
+                version=version,
+            ),
+            "deepseek-r1-distill-llama-70b": RateCardEntry(
+                rate_card_id=f"rc_groq_r1_70b_{version}",
+                model_alias="deepseek-r1-distill-llama-70b",
+                provider="groq",
+                input_rate_per_million=0.59,
+                output_rate_per_million=0.79,
+                version=version,
+            ),
         }
 
     def get_rate(self, model_alias: str) -> Optional[RateCardEntry]:
