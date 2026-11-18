@@ -1,7 +1,7 @@
 """FastAPI Application entrypoint with production hardening."""
 
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Optional
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
@@ -203,9 +203,19 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 @app.get("/", include_in_schema=False)
 @app.get("/ui", include_in_schema=False)
-async def serve_chat_ui():
-    """Serves the interactive web chat client."""
+async def serve_chat_ui(request: Request, key: Optional[str] = None):
+    """Serves the interactive web chat client with optional cookie initialization."""
     html_path = STATIC_DIR / "index.html"
     if html_path.exists():
-        return FileResponse(html_path)
+        response = FileResponse(html_path)
+        if key and key.strip():
+            response.set_cookie(
+                key="smartai_gateway_key",
+                value=key.strip(),
+                max_age=86400 * 30,
+                httponly=False,
+                samesite="lax",
+                secure=settings.APP_ENV == "production",
+            )
+        return response
     return JSONResponse({"status": "Gateway online", "docs": "/docs"})

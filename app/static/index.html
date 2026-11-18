@@ -1168,7 +1168,11 @@
                     <span id="nav-mode-text" style="font-size: 0.82rem; color: var(--text-secondary);">Auto-Routing</span>
                 </div>
             </div>
-            <div class="nav-right">
+            <div class="nav-right" style="display: flex; gap: 8px; align-items: center;">
+                <button class="btn-icon" onclick="openModal('agents-modal')" title="Gateway Authentication & Agents" id="nav-auth-btn" style="display: flex; align-items: center; gap: 6px; font-size: 0.8rem; padding: 4px 10px; width: auto; border-radius: 20px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-subtle);">
+                    <span id="nav-auth-icon">🔑</span>
+                    <span id="nav-auth-label" style="font-size: 0.75rem; color: var(--text-secondary);">Auth Key</span>
+                </button>
                 <button class="btn-icon" onclick="startNewChat()" title="Start New Chat">🗑️</button>
             </div>
         </header>
@@ -1239,6 +1243,22 @@
                 <button class="btn-icon" onclick="closeModal('agents-modal')">✕</button>
             </div>
             <div class="modal-body">
+                <!-- Gateway API Key Authentication Box -->
+                <div style="background: rgba(15, 23, 42, 0.65); border: 1px solid var(--border-color); border-radius: 8px; padding: 12px 16px; margin-bottom: 18px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <label style="font-weight: 600; font-size: 0.82rem; color: #cbd5e1;">🔑 Gateway Master API Key</label>
+                        <span id="gateway-auth-badge" style="font-size: 0.72rem; padding: 2px 8px; border-radius: 12px; background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4);">Key Required</span>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 8px;">
+                        When running in production, the Gateway API key is required to authenticate your browser and manage Agent configurations.
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <input type="password" id="gateway-key-input" placeholder="Paste Gateway API Key (e.g. gw_sec_prod_...)" style="flex: 1; padding: 7px 12px; font-size: 0.82rem; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 6px; color: var(--text-primary);">
+                        <button type="button" class="btn-modal primary" onclick="handleSaveGatewayKey()" style="padding: 7px 14px; font-size: 0.8rem; white-space: nowrap;">Authenticate</button>
+                    </div>
+                    <div id="gateway-key-feedback" style="font-size: 0.75rem; margin-top: 6px;"></div>
+                </div>
+
                 <div class="agent-config-grid">
                     <!-- Weak Agent Configuration -->
                     <div class="agent-card weak">
@@ -1636,10 +1656,9 @@
             try {
                 const response = await fetch('/api/gateway/stream', {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-User-ID': 'default_user'
-                    },
+                    headers: getAuthHeaders({
+                        'Content-Type': 'application/json'
+                    }),
                     body: JSON.stringify({
                         prompt: text,
                         mode: currentMode,
@@ -1864,10 +1883,158 @@
             }
         }
 
+        // =============================================================
+        // Gateway Authentication & Session Helper
+        // =============================================================
+        function getGatewayKey() {
+            // 1. Read from URL query params if present (e.g., ?key=... or ?api_key=...)
+            const params = new URLSearchParams(window.location.search);
+            const urlKey = params.get('key') || params.get('api_key');
+            if (urlKey) {
+                localStorage.setItem('smartai_gateway_key', urlKey.trim());
+                document.cookie = `smartai_gateway_key=${encodeURIComponent(urlKey.trim())}; path=/; max-age=2592000; SameSite=Lax`;
+                try {
+                    window.history.replaceState({}, document.title, window.location.pathname);
+                } catch (e) {}
+                return urlKey.trim();
+            }
+            // 2. Read from localStorage
+            const localKey = (localStorage.getItem('smartai_gateway_key') || '').trim();
+            if (localKey) {
+                return localKey;
+            }
+            // 3. Fallback to cookie
+            const match = document.cookie.match(/smartai_gateway_key=([^;]+)/);
+            if (match && match[1]) {
+                const cookieKey = decodeURIComponent(match[1]).trim();
+                localStorage.setItem('smartai_gateway_key', cookieKey);
+                return cookieKey;
+            }
+            return '';
+        }
+
+        function setGatewayKey(key) {
+            if (key && key.trim()) {
+                const cleaned = key.trim();
+                localStorage.setItem('smartai_gateway_key', cleaned);
+                document.cookie = `smartai_gateway_key=${encodeURIComponent(cleaned)}; path=/; max-age=2592000; SameSite=Lax`;
+            } else {
+                localStorage.removeItem('smartai_gateway_key');
+                document.cookie = 'smartai_gateway_key=; path=/; max-age=0; SameSite=Lax';
+            }
+            updateAuthBadge();
+        }
+
+        function getAuthHeaders(extra = {}) {
+            const headers = { ...extra };
+            const key = getGatewayKey();
+            if (key) {
+                headers['Authorization'] = `Bearer ${key}`;
+            }
+            const userId = localStorage.getItem('smartai_user_id') || 'default_user';
+            headers['X-User-ID'] = userId;
+            return headers;
+        }
+
+        async function updateAuthBadge() {
+            const key = getGatewayKey();
+            const badge = document.getElementById('gateway-auth-badge');
+            const navIcon = document.getElementById('nav-auth-icon');
+            const navLabel = document.getElementById('nav-auth-label');
+            const input = document.getElementById('gateway-key-input');
+
+            if (!key) {
+                if (badge) {
+                    badge.innerText = 'Key Required';
+                    badge.style.background = 'rgba(239, 68, 68, 0.2)';
+                    badge.style.color = '#f87171';
+                    badge.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                }
+                if (navLabel) navLabel.innerText = 'Auth Key';
+                if (navIcon) navIcon.innerText = '🔑';
+                return false;
+            }
+
+            if (input && !input.value) {
+                input.value = key;
+            }
+
+            try {
+                const res = await fetch('/v1/auth/verify', {
+                    headers: { 'Authorization': `Bearer ${key}` }
+                });
+                if (res.ok) {
+                    if (badge) {
+                        badge.innerText = 'Authenticated';
+                        badge.style.background = 'rgba(52, 211, 153, 0.2)';
+                        badge.style.color = '#34d399';
+                        badge.style.borderColor = 'rgba(52, 211, 153, 0.4)';
+                    }
+                    if (navLabel) navLabel.innerText = 'Connected';
+                    if (navIcon) navIcon.innerText = '🟢';
+                    return true;
+                } else {
+                    if (badge) {
+                        badge.innerText = 'Invalid Key';
+                        badge.style.background = 'rgba(239, 68, 68, 0.2)';
+                        badge.style.color = '#f87171';
+                        badge.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                    }
+                    if (navLabel) navLabel.innerText = 'Invalid Key';
+                    if (navIcon) navIcon.innerText = '🔴';
+                    return false;
+                }
+            } catch (e) {
+                return false;
+            }
+        }
+
+        async function handleSaveGatewayKey() {
+            const input = document.getElementById('gateway-key-input');
+            const feedback = document.getElementById('gateway-key-feedback');
+            const key = input.value.trim();
+            if (!key) {
+                feedback.innerHTML = '<span style="color:var(--danger)">Please enter a Gateway API Key.</span>';
+                return;
+            }
+            feedback.innerHTML = '<span style="color:var(--text-secondary)">Validating Gateway API key...</span>';
+            try {
+                const res = await fetch('/v1/auth/verify', {
+                    headers: { 'Authorization': `Bearer ${key}` }
+                });
+                if (res.ok) {
+                    setGatewayKey(key);
+                    feedback.innerHTML = '<span style="color:#34d399">✔ Gateway API Key verified! Loading agents...</span>';
+                    await loadAgentStatus();
+                    await loadAgentSettings();
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    const msg = (err.error && err.error.message) || 'Invalid key provided.';
+                    feedback.innerHTML = `<span style="color:var(--danger)">✖ Authentication failed: ${msg}</span>`;
+                }
+            } catch (e) {
+                feedback.innerHTML = `<span style="color:var(--danger)">✖ Network error: ${e.message}</span>`;
+            }
+        }
+
+        function extractApiError(errData, fallbackMessage = 'Failed') {
+            if (!errData) return fallbackMessage;
+            if (errData.error && errData.error.message) return errData.error.message;
+            if (errData.detail) {
+                if (typeof errData.detail === 'string') return errData.detail;
+                if (errData.detail.error && errData.detail.error.message) return errData.detail.error.message;
+                try {
+                    return JSON.stringify(errData.detail);
+                } catch (e) {}
+            }
+            if (errData.message) return errData.message;
+            return fallbackMessage;
+        }
+
         // Load Active Agent Status into Sidebar
         async function loadAgentStatus() {
             try {
-                const res = await fetch('/api/agents/config', { headers: { 'X-User-ID': 'default_user' } });
+                const res = await fetch('/api/agents/config', { headers: getAuthHeaders() });
                 if (res.ok) {
                     const data = await res.json();
                     const weak = data.agents && data.agents.weak;
@@ -1891,14 +2058,25 @@
                         strongEl.innerText = 'Not Configured';
                         strongEl.style.color = 'var(--text-muted)';
                     }
+                } else if (res.status === 401) {
+                    const weakEl = document.getElementById('sidebar-weak-model');
+                    const strongEl = document.getElementById('sidebar-strong-model');
+                    if (weakEl) weakEl.innerText = 'Auth Required';
+                    if (strongEl) strongEl.innerText = 'Auth Required';
                 }
             } catch (e) {}
         }
 
         // Load Settings into Modal
         async function loadAgentSettings() {
+            updateAuthBadge();
+            const input = document.getElementById('gateway-key-input');
+            if (input && !input.value) {
+                input.value = getGatewayKey();
+            }
+
             try {
-                const res = await fetch('/api/agents/config', { headers: { 'X-User-ID': 'default_user' } });
+                const res = await fetch('/api/agents/config', { headers: getAuthHeaders() });
                 if (res.ok) {
                     const data = await res.json();
                     const weak = data.agents && data.agents.weak;
@@ -1919,6 +2097,11 @@
                         if (strong.base_url) document.getElementById('strong-base-url').value = strong.base_url;
                         document.getElementById('strong-temp').value = strong.temperature;
                         document.getElementById('strong-tokens').value = strong.max_tokens;
+                    }
+                } else if (res.status === 401) {
+                    const feedback = document.getElementById('gateway-key-feedback');
+                    if (feedback && !getGatewayKey()) {
+                        feedback.innerHTML = '<span style="color:#f87171">⚠️ Please enter your Gateway API Key above to configure agents.</span>';
                     }
                 }
             } catch (e) {}
@@ -1944,7 +2127,7 @@
             try {
                 const res = await fetch('/api/agents/configure', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-User-ID': 'default_user' },
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify({
                         agent_type: agent,
                         provider,
@@ -1960,11 +2143,16 @@
                 if (res.ok) {
                     statusDiv.innerHTML = '<span style="color:var(--accent-weak)">✔ Configuration securely encrypted & saved.</span>';
                     document.getElementById(`${agent}-key`).value = '';
-                    loadAgentStatus();
-                    loadAgentSettings();
+                    await loadAgentStatus();
+                    await loadAgentSettings();
                 } else {
-                    const err = await res.json();
-                    statusDiv.innerHTML = `<span style="color:var(--danger)">✖ Save error: ${err.detail || 'Failed'}</span>`;
+                    const errData = await res.json().catch(() => ({}));
+                    let errMsg = extractApiError(errData, 'Failed to save configuration');
+                    if (res.status === 401) {
+                        errMsg = 'Unauthorized: Please enter and authenticate your Gateway API Key at the top of this modal.';
+                        document.getElementById('gateway-key-input')?.focus();
+                    }
+                    statusDiv.innerHTML = `<span style="color:var(--danger)">✖ Save error: ${errMsg}</span>`;
                 }
             } catch (e) {
                 statusDiv.innerHTML = `<span style="color:var(--danger)">✖ Network error: ${e.message}</span>`;
@@ -1984,7 +2172,7 @@
             try {
                 const res = await fetch('/api/agents/test', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-User-ID': 'default_user' },
+                    headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify({
                         provider,
                         api_key: api_key || null,
@@ -1994,11 +2182,20 @@
                     })
                 });
 
-                const data = await res.json();
-                if (data.success) {
-                    statusDiv.innerHTML = `<span style="color:var(--accent-weak)">✔ Connected in ${data.latency_ms}ms! Real probe response received.</span>`;
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success) {
+                        statusDiv.innerHTML = `<span style="color:var(--accent-weak)">✔ Connected in ${data.latency_ms}ms! Real probe response received.</span>`;
+                    } else {
+                        statusDiv.innerHTML = `<span style="color:var(--danger)">✖ Connection failed: ${data.error || 'Unknown error'}</span>`;
+                    }
                 } else {
-                    statusDiv.innerHTML = `<span style="color:var(--danger)">✖ Connection failed: ${data.error || 'Unknown error'}</span>`;
+                    const errData = await res.json().catch(() => ({}));
+                    let errMsg = extractApiError(errData, 'Probe failed');
+                    if (res.status === 401) {
+                        errMsg = 'Unauthorized: Please authenticate your Gateway API Key above.';
+                    }
+                    statusDiv.innerHTML = `<span style="color:var(--danger)">✖ Connection failed: ${errMsg}</span>`;
                 }
             } catch (e) {
                 statusDiv.innerHTML = `<span style="color:var(--danger)">✖ Probe error: ${e.message}</span>`;
@@ -2008,7 +2205,7 @@
         // Analytics Overview
         async function loadAnalytics() {
             try {
-                const res = await fetch('/api/analytics/overview');
+                const res = await fetch('/api/analytics/overview', { headers: getAuthHeaders() });
                 if (res.ok) {
                     const d = await res.json();
                     document.getElementById('stat-kpi-total').innerText = d.total_requests;
@@ -2032,7 +2229,7 @@
             const container = document.getElementById('history-modal-list');
             container.innerHTML = '<em>Fetching execution audit records...</em>';
             try {
-                const res = await fetch('/api/gateway/history?limit=25');
+                const res = await fetch('/api/gateway/history?limit=25', { headers: getAuthHeaders() });
                 if (res.ok) {
                     const list = await res.json();
                     if (!list || list.length === 0) {
@@ -2059,7 +2256,8 @@
             }
         }
 
-        // Initialize status on page load
+        // Initialize status and auth on page load
+        updateAuthBadge();
         loadAgentStatus();
     </script>
 </body>

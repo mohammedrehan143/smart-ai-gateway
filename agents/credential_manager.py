@@ -153,11 +153,14 @@ class CredentialManager:
             base_url = validate_provider_base_url(base_url)
 
         now = time.time()
-        encrypted = encrypt_secret(api_key.strip())
         key_tuple = (user_id, agent_type.lower())
-
         existing = self._configs.get(key_tuple)
         created_at = existing.created_at if existing else now
+
+        if api_key.strip() == "PRESERVE_EXISTING" and existing:
+            encrypted = existing.encrypted_key
+        else:
+            encrypted = encrypt_secret(api_key.strip())
 
         config = AgentConfig(
             user_id=user_id,

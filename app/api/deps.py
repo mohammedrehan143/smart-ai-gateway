@@ -87,19 +87,25 @@ async def get_authenticated_user(
             token_identifier="dev_local",
         )
 
-    # 3. Production or key-configured mode: Authorization header is strictly mandatory
+    # 3. Production or key-configured mode: Authorization header (or cookie/query key) is required
     if not authorization:
-        default_rate_limiter.record_failed_auth(client_ip)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={
-                "error": {
-                    "type": "unauthorized",
-                    "message": "Missing Authorization header. Bearer token required.",
-                    "retryable": False,
-                }
-            },
-        )
+        cookie_key = request.cookies.get("smartai_gateway_key")
+        query_key = request.query_params.get("api_key") or request.query_params.get("key")
+        token_candidate = cookie_key or query_key
+        if token_candidate and token_candidate.strip():
+            authorization = f"Bearer {token_candidate.strip()}"
+        else:
+            default_rate_limiter.record_failed_auth(client_ip)
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail={
+                    "error": {
+                        "type": "unauthorized",
+                        "message": "Missing Authorization header. Bearer token required.",
+                        "retryable": False,
+                    }
+                },
+            )
 
     scheme, _, token = authorization.partition(" ")
     if scheme.lower() != "bearer" or not token.strip():
