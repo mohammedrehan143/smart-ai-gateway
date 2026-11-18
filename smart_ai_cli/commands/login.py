@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import typer
 from rich.prompt import Prompt
 from smart_ai_cli.auth import default_auth_manager
@@ -20,20 +21,24 @@ def login_cmd(
     """Authenticates with the Smart AI Gateway and stores credentials in OS Keyring."""
     cfg = default_config_manager.load_config()
     target_url = url or cfg.gateway_url
+    is_interactive = sys.stdin.isatty() if hasattr(sys.stdin, "isatty") else False
 
-    if not url:
+    if not url and is_interactive and not key:
         prompt_url = Prompt.ask(
             "[bold white]Enter Gateway URL[/bold white]",
             default=target_url,
         )
         target_url = prompt_url.strip()
 
-    if not key:
-        api_key = Prompt.ask(
-            "[bold white]Enter Gateway API Key (leave empty for open demo mode)[/bold white]",
-            password=True,
-            default="",
-        ).strip()
+    if key is None:
+        if is_interactive:
+            api_key = Prompt.ask(
+                "[bold white]Enter Gateway API Key (leave empty for open demo mode)[/bold white]",
+                password=True,
+                default="",
+            ).strip()
+        else:
+            api_key = ""
     else:
         api_key = key.strip()
 
@@ -41,10 +46,41 @@ def login_cmd(
     client = GatewayClient(base_url=target_url, api_key=api_key if api_key else None)
 
     try:
-        # Check liveness and verify auth
+        # Check liveness
         live_info = client.health_live()
-        auth_info = client.verify_auth()
+    except GatewayConnectionError as exc:
+        print_error(f"Connection error: {exc}", hint=f"Ensure {target_url} is reachable.")
+        raise typer.Exit(code=1)
+    except Exception as exc:
+        print_error(f"Unexpected connection error: {exc}")
+        raise typer.Exit(code=1)
 
+    try:
+        auth_info = client.verify_auth()
+    except AuthenticationError as exc:
+        # If user left key empty but gateway requires auth, prompt interactively
+        if not api_key and is_interactive:
+            console.print(
+                f"[bold yellow]▲ Gateway at {target_url} requires authentication (Bearer token required).[/bold yellow]"
+            )
+            api_key = Prompt.ask(
+                "[bold white]Enter Gateway API Key[/bold white]",
+                password=True,
+            ).strip()
+            if api_key:
+                client.api_key = api_key
+                auth_info = client.verify_auth()
+            else:
+                print_error(
+                    "Authentication required: Gateway enforces API key authentication.",
+                    hint=f"Provide a valid Gateway API key for {target_url}.",
+                )
+                raise typer.Exit(code=1)
+        else:
+            print_error(f"Authentication failed: {exc}", hint="Verify your gateway key or check environment settings.")
+            raise typer.Exit(code=1)
+
+    try:
         # Update config & keyring
         default_config_manager.set("gateway_url", target_url)
         if api_key:
@@ -66,12 +102,6 @@ def login_cmd(
             },
             border_style="green",
         )
-    except AuthenticationError as exc:
-        print_error(f"Authentication failed: {exc}", hint="Verify your gateway key or check environment settings.")
-        raise typer.Exit(code=1)
-    except GatewayConnectionError as exc:
-        print_error(f"Connection error: {exc}", hint=f"Ensure {target_url} is reachable.")
-        raise typer.Exit(code=1)
     except Exception as exc:
         print_error(f"Unexpected error during login: {exc}")
         raise typer.Exit(code=1)

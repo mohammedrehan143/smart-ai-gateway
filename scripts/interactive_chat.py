@@ -2,6 +2,7 @@
 
 import os
 import httpx
+from smart_ai_cli.auth import default_auth_manager
 
 DEFAULT_BASE = os.environ.get("GATEWAY_BASE_URL", "https://smart-ai-gateway.onrender.com").rstrip("/")
 GATEWAY_URL = os.environ.get("GATEWAY_URL", f"{DEFAULT_BASE}/v1/chat")
@@ -61,8 +62,13 @@ def main():
             "parameters": {"temperature": 0.2, "max_output_tokens": 1024},
         }
 
+        headers = {"Content-Type": "application/json"}
+        api_key = default_auth_manager.get_api_key()
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
+
         try:
-            resp = client.post(GATEWAY_URL, json=payload)
+            resp = client.post(GATEWAY_URL, json=payload, headers=headers)
             if resp.status_code == 200:
                 data = resp.json()
                 assistant_msg = data["choices"][0]["message"]["content"]

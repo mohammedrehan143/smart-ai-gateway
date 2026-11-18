@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 from rich.panel import Panel
 from rich.table import Table
 
-from smart_ai_cli.client import GatewayClient, GatewayClientError
+from smart_ai_cli.client import AuthenticationError, GatewayClient, GatewayClientError
 from smart_ai_cli.tools import AGENT_SYSTEM_PROMPT, TOOL_DEFINITIONS, execute_tool
 from smart_ai_cli.ui import console, print_error, print_success
 
@@ -91,6 +91,14 @@ class AutonomousAgentRunner:
                     policy=policy,
                     temperature=temperature,
                 )
+            except AuthenticationError as exc:
+                result.success = False
+                result.error = str(exc)
+                print_error(
+                    f"Agent authentication failed: {exc}",
+                    hint="Run 'smartai login --key <API_KEY>' or set GATEWAY_API_KEY to authenticate with the gateway.",
+                )
+                return result
             except GatewayClientError as exc:
                 result.success = False
                 result.error = str(exc)

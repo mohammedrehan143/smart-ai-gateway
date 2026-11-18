@@ -4,6 +4,14 @@ from __future__ import annotations
 
 from typing import Optional
 import typer
+
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except Exception:
+    pass
+
 from smart_ai_cli import __app_name__, __version__
 from smart_ai_cli.commands.benchmark import benchmark_cmd
 from smart_ai_cli.commands.chat import ask_cmd, chat_cmd

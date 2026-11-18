@@ -8,7 +8,9 @@ from smart_ai_cli.main import app
 runner = CliRunner()
 
 
-def test_auth_manager_storage(tmp_path: Path):
+def test_auth_manager_storage(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("SMARTAI_API_KEY", raising=False)
+    monkeypatch.delenv("GATEWAY_API_KEY", raising=False)
     auth_file = tmp_path / "credentials.json"
     mgr = AuthManager(service_name="test_smartai", username="test_user")
     mgr.fallback_file = auth_file
@@ -41,3 +43,34 @@ def test_cli_login_masked_credential(monkeypatch):
     )
     # Output must NEVER print the raw secret key
     assert secret_key not in runner_res.stdout
+
+
+def test_cli_ask_auth_error_hint(monkeypatch):
+    from smart_ai_cli.client import AuthenticationError, GatewayClient
+
+    def mock_chat_auth_fail(*args, **kwargs):
+        raise AuthenticationError("Missing Authorization header. Bearer token required.")
+
+    monkeypatch.setattr(GatewayClient, "chat", mock_chat_auth_fail)
+
+    res = runner.invoke(app, ["ask", "Hello test", "--no-stream"])
+    assert res.exit_code == 1
+    output = res.stdout + (res.stderr or "")
+    assert "Authentication failed" in output
+    assert "smartai login" in output
+
+
+def test_cli_chat_auth_error_hint(monkeypatch):
+    from smart_ai_cli.client import AuthenticationError, GatewayClient
+    from smart_ai_cli.auth import AuthManager
+
+    monkeypatch.setattr(AuthManager, "get_api_key", lambda self: None)
+
+    def mock_verify_fail(*args, **kwargs):
+        raise AuthenticationError("Missing Authorization header. Bearer token required.")
+
+    monkeypatch.setattr(GatewayClient, "verify_auth", mock_verify_fail)
+
+    res = runner.invoke(app, ["chat"], input="/exit\n")
+    assert res.exit_code == 0
+    assert "Gateway requires authentication" in res.stdout

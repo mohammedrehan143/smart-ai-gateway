@@ -8,7 +8,8 @@ import sys
 from typing import Dict, List, Optional
 import typer
 from smart_ai_cli.agent_runner import AutonomousAgentRunner
-from smart_ai_cli.client import GatewayClient, GatewayClientError
+from smart_ai_cli.auth import default_auth_manager
+from smart_ai_cli.client import AuthenticationError, GatewayClient, GatewayClientError
 from smart_ai_cli.config import default_config_manager
 from smart_ai_cli.ui import (
     ChatPrompt,
@@ -37,6 +38,34 @@ def chat_cmd(
     use_stream = stream if stream is not None else cfg.stream_output
 
     client = GatewayClient()
+
+    if not client.api_key:
+        try:
+            client.verify_auth()
+        except AuthenticationError:
+            is_interactive = sys.stdin.isatty() if hasattr(sys.stdin, "isatty") else False
+            console.print(
+                f"{CHAT_INDENT}[bold yellow]▲ Gateway requires authentication (no API key configured).[/bold yellow]"
+            )
+            if is_interactive:
+                try:
+                    entered = ChatPrompt.ask(
+                        f"{CHAT_INDENT}[bold white]Enter Gateway API Key to authenticate[/bold white]"
+                    ).strip()
+                    if entered:
+                        default_auth_manager.set_api_key(entered)
+                        client.api_key = entered
+                        console.print(f"{CHAT_INDENT}[bold green]✔[/bold green] Credentials saved successfully.\n")
+                    else:
+                        console.print(f"{CHAT_INDENT}[dim]Continuing unauthenticated...[/dim]\n")
+                except (KeyboardInterrupt, EOFError):
+                    return
+            else:
+                console.print(
+                    f"{CHAT_INDENT}[dim]Hint: Run 'smartai login --key <API_KEY>' or set GATEWAY_API_KEY.[/dim]\n"
+                )
+        except Exception:
+            pass
 
     print_chat_header(cfg.gateway_url, active_policy, active_temp)
 
@@ -206,6 +235,25 @@ def chat_cmd(
                     indent=4,
                 )
 
+        except AuthenticationError as exc:
+            sys.stdout.write("\n")
+            console.print(f"{CHAT_INDENT}[bold red]✖[/bold red] Chat request failed: {exc}")
+            console.print(
+                f"{CHAT_INDENT}[bold yellow]▲ Hint:[/] Gateway authentication failed. "
+                f"Run [bold cyan]'smartai login --key <YOUR_KEY>'[/bold cyan] or set [bold cyan]GATEWAY_API_KEY[/bold cyan]."
+            )
+            is_interactive = sys.stdin.isatty() if hasattr(sys.stdin, "isatty") else False
+            if is_interactive:
+                try:
+                    retry_key = ChatPrompt.ask(
+                        f"{CHAT_INDENT}[bold white]Enter Gateway API Key to update and retry[/bold white]"
+                    ).strip()
+                    if retry_key:
+                        default_auth_manager.set_api_key(retry_key)
+                        client.api_key = retry_key
+                        console.print(f"{CHAT_INDENT}[bold green]✔[/bold green] Key updated. Please try your message again.")
+                except (KeyboardInterrupt, EOFError):
+                    break
         except GatewayClientError as exc:
             sys.stdout.write("\n")
             console.print(f"{CHAT_INDENT}[bold red]✖[/bold red] Chat request failed: {exc}")
@@ -326,6 +374,13 @@ def ask_cmd(
                 output_tokens=usage.get("output_tokens"),
             )
 
+    except AuthenticationError as exc:
+        sys.stdout.write("\n")
+        print_error(
+            f"Authentication failed: {exc}",
+            hint="Please run 'smartai login --key <API_KEY>' or configure GATEWAY_API_KEY in your environment or .env file.",
+        )
+        raise typer.Exit(code=1)
     except GatewayClientError as exc:
         sys.stdout.write("\n")
         print_error(f"Ask query failed: {exc}")
