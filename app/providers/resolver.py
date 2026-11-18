@@ -199,7 +199,7 @@ class DynamicProviderAdapter(BaseProviderAdapter):
         target_agent = "weak" if tier == "cheap" else "strong"
         raise ProviderAuthError(
             f"No live API key configured for {target_agent} agent ({model_alias}). "
-            f"Please configure your API key in Agent Settings (http://localhost:8000) or set GROQ_API_KEY / OPENAI_API_KEY in your environment."
+            f"Please configure your API key in Agent Settings (https://smart-ai-gateway.onrender.com) or set GROQ_API_KEY / OPENAI_API_KEY in your environment."
         )
 
     async def generate(

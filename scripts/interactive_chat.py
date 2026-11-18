@@ -1,8 +1,11 @@
 """Interactive Terminal Chat Client for Smart AI Gateway."""
 
+import os
 import httpx
 
-GATEWAY_URL = "http://localhost:8000/v1/chat"
+DEFAULT_BASE = os.environ.get("GATEWAY_BASE_URL", "https://smart-ai-gateway.onrender.com").rstrip("/")
+GATEWAY_URL = os.environ.get("GATEWAY_URL", f"{DEFAULT_BASE}/v1/chat")
+HEALTH_URL = f"{DEFAULT_BASE}/health/live"
 
 
 def main():
@@ -20,13 +23,12 @@ def main():
 
     # Check connection
     try:
-        health = client.get("http://localhost:8000/health/live")
+        health = client.get(HEALTH_URL)
         if health.status_code != 200:
-            print("[WARN] Gateway health returned non-200. Is the server running?")
+            print(f"[WARN] Gateway health returned non-200 from {HEALTH_URL}.")
     except Exception:
-        print("[ERROR] Could not connect to gateway at http://localhost:8000.")
-        print("Please ensure the server is running in another terminal:")
-        print("    uvicorn app.main:app --port 8000\n")
+        print(f"[ERROR] Could not connect to gateway at {DEFAULT_BASE}.")
+        print("Please ensure the server is reachable or set GATEWAY_BASE_URL:\n")
         return
 
     while True:
@@ -75,7 +77,9 @@ def main():
                 cost = usage.get("cost_estimate")
                 cost_str = f"${cost:.6f}" if cost is not None else "N/A"
 
-                print(f"\nGateway [{model} | {tier.upper()} | {latency}ms | {tokens} tokens | {cost_str} | cached={cached}]:")
+                print(
+                    f"\nGateway [{model} | {tier.upper()} | {latency}ms | {tokens} tokens | {cost_str} | cached={cached}]:"
+                )
                 print(f"Reason: {reason}")
                 print("-" * 50)
                 print(assistant_msg)

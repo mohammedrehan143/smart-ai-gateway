@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 
 class GatewayConfig(BaseModel):
-    gateway_url: str = Field(default="http://localhost:8000")
+    gateway_url: str = Field(default="https://smart-ai-gateway.onrender.com")
     default_policy: Literal["adaptive", "always_cheap", "always_strong"] = Field(default="adaptive")
     default_temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     timeout_seconds: float = Field(default=30.0, gt=0.0)
