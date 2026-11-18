@@ -277,4 +277,3 @@ def test_cli_chat_multiturn_resilience_to_empty_and_failures(monkeypatch):
     # In call 2, verify no empty assistant messages were passed
     for msg in calls[1]:
         assert msg.get("content") != ""
-

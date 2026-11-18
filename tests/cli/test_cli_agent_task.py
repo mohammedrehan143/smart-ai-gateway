@@ -8,7 +8,6 @@ from smart_ai_cli.agent_runner import AutonomousAgentRunner, extract_action_bloc
 from smart_ai_cli.main import app
 from smart_ai_cli.tools import (
     edit_file,
-    execute_tool,
     list_directory,
     read_file,
     run_command,

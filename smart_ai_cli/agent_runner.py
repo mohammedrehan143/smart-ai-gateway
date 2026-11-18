@@ -620,4 +620,3 @@ class AutonomousAgentRunner:
                     "Otherwise, output the next action block."
                 )
                 conversation.append({"role": "user", "content": feedback_prompt})
-

@@ -55,4 +55,3 @@ def test_empty_content_in_chat_message_schema():
     )
     assert msg_tools.tool_calls is not None
     assert len(msg_tools.tool_calls) == 1
-

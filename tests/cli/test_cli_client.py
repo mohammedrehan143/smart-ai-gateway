@@ -70,4 +70,3 @@ def test_client_sanitize_messages():
     sanitized_tools = client._sanitize_messages([tool_msg])
     assert len(sanitized_tools) == 1
     assert sanitized_tools[0]["tool_calls"] is not None
-

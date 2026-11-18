@@ -4,14 +4,11 @@
 """
 
 import json
-from pathlib import Path
-from unittest.mock import MagicMock
 from typer.testing import CliRunner
 
-from smart_ai_cli.agent_runner import AutonomousAgentRunner
 from smart_ai_cli.client import GatewayClient
 from smart_ai_cli.main import app
-from smart_ai_cli.tools import write_file, edit_file, execute_tool
+from smart_ai_cli.tools import write_file, edit_file
 
 runner = CliRunner()
 
@@ -145,9 +142,7 @@ def test_chat_interactive_multiturn_sequential_tools(tmp_path, monkeypatch):
                                     "id": "call_turn1",
                                     "function": {
                                         "name": "write_file",
-                                        "arguments": json.dumps(
-                                            {"path": "notes.txt", "content": "Initial Content"}
-                                        ),
+                                        "arguments": json.dumps({"path": "notes.txt", "content": "Initial Content"}),
                                     },
                                 }
                             ],
@@ -202,11 +197,7 @@ def test_chat_interactive_multiturn_sequential_tools(tmp_path, monkeypatch):
     monkeypatch.setattr(GatewayClient, "chat", mock_chat)
     monkeypatch.chdir(tmp_path)
 
-    chat_input = (
-        "create notes.txt with Initial Content\n"
-        "edit notes.txt and change to Updated Content\n"
-        "/exit\n"
-    )
+    chat_input = "create notes.txt with Initial Content\nedit notes.txt and change to Updated Content\n/exit\n"
     res = runner.invoke(app, ["chat", "--no-stream"], input=chat_input)
     assert res.exit_code == 0
     assert target_file.exists()

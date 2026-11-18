@@ -159,7 +159,9 @@ def chat_cmd(
                     if retry_key:
                         default_auth_manager.set_api_key(retry_key)
                         client.api_key = retry_key
-                        console.print(f"{CHAT_INDENT}[bold green]✔[/bold green] Key updated. Please try your message again.")
+                        console.print(
+                            f"{CHAT_INDENT}[bold green]✔[/bold green] Key updated. Please try your message again."
+                        )
                 except (KeyboardInterrupt, EOFError):
                     break
         except GatewayClientError as exc:
