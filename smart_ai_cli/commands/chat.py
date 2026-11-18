@@ -6,18 +6,14 @@ import json
 import sys
 from typing import Dict, List, Optional
 import typer
-from rich.prompt import Prompt
 from smart_ai_cli.client import GatewayClient, GatewayClientError
 from smart_ai_cli.config import default_config_manager
 from smart_ai_cli.ui import (
     ChatPrompt,
     console,
-    print_banner,
     print_chat_header,
     print_chat_metadata,
     print_error,
-    print_success,
-    print_warning,
 )
 
 app = typer.Typer(help="Interactive chat session and one-shot queries.")

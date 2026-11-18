@@ -1,4 +1,4 @@
-"""Cache key generation and eligibility rules."""
+"""Cache key generation and eligibility rules with tenant isolation."""
 
 from __future__ import annotations
 
@@ -12,13 +12,15 @@ def compute_cache_key(
     model_alias: str,
     messages: List[ChatMessage],
     parameters: GenerationParameters,
+    tenant_id: str = "default",
 ) -> str:
-    """Compute deterministic SHA-256 cache key from model, messages, and parameters."""
+    """Compute deterministic SHA-256 cache key from model, messages, parameters, and tenant ID."""
     normalized_messages = [
         {"role": m.role, "content": m.content, "name": m.name}
         for m in messages
     ]
     key_dict = {
+        "tenant_id": tenant_id,
         "model": model_alias,
         "messages": normalized_messages,
         "temperature": parameters.temperature,

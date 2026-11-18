@@ -1,4 +1,4 @@
-"""BYOK Encrypted Credential Management API endpoints."""
+"""BYOK Encrypted Credential Management API endpoints with strict tenant isolation."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field
 
-from app.api.deps import verify_gateway_auth
+from app.api.deps import AuthenticatedUser, get_authenticated_user
 from app.domain.byok import default_byok_manager
 
 router = APIRouter(prefix="/v1/credentials", tags=["Credentials"])
@@ -27,19 +27,27 @@ class CredentialResponse(BaseModel):
     updated_at: float
 
 
+def _resolve_effective_user(user: AuthenticatedUser, x_user_id: Optional[str]) -> str:
+    """Enforces that only admin tokens may act on behalf of another user_id."""
+    if user.is_admin and x_user_id:
+        return x_user_id
+    return user.user_id
+
+
 @router.post(
     "",
     response_model=CredentialResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(verify_gateway_auth)],
 )
 async def store_user_credential(
     payload: CredentialCreateInput,
-    x_user_id: Optional[str] = Header("default_user", alias="X-User-ID"),
+    user: AuthenticatedUser = Depends(get_authenticated_user),
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
 ) -> Dict[str, Any]:
-    """Securely stores an encrypted provider credential for a specific user."""
+    """Securely stores an encrypted provider credential for the authenticated user."""
+    effective_user = _resolve_effective_user(user, x_user_id)
     cred = default_byok_manager.store_credential(
-        user_id=x_user_id or "default_user",
+        user_id=effective_user,
         provider=payload.provider.lower(),
         api_key=payload.api_key,
         base_url=payload.base_url,
@@ -58,27 +66,29 @@ async def store_user_credential(
     "",
     response_model=List[CredentialResponse],
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(verify_gateway_auth)],
 )
 async def list_user_credentials(
-    x_user_id: Optional[str] = Header("default_user", alias="X-User-ID"),
+    user: AuthenticatedUser = Depends(get_authenticated_user),
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
 ) -> List[Dict[str, Any]]:
-    """Retrieves all registered provider credentials (masked) for the authenticated user."""
-    return default_byok_manager.list_credentials(user_id=x_user_id or "default_user")
+    """Retrieves all registered provider credentials (masked) strictly for the authenticated user."""
+    effective_user = _resolve_effective_user(user, x_user_id)
+    return default_byok_manager.list_credentials(user_id=effective_user)
 
 
 @router.delete(
     "/{provider}",
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(verify_gateway_auth)],
 )
 async def delete_user_credential(
     provider: str,
-    x_user_id: Optional[str] = Header("default_user", alias="X-User-ID"),
+    user: AuthenticatedUser = Depends(get_authenticated_user),
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
 ) -> Dict[str, Any]:
-    """Deletes/revokes a stored credential for a provider."""
+    """Deletes/revokes a stored credential for a provider for the authenticated user."""
+    effective_user = _resolve_effective_user(user, x_user_id)
     deleted = default_byok_manager.delete_credential(
-        user_id=x_user_id or "default_user",
+        user_id=effective_user,
         provider=provider.lower(),
     )
     if not deleted:

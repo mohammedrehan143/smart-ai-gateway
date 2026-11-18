@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, Header, status
 from pydantic import BaseModel, Field
 
-from app.api.deps import get_orchestrator, verify_gateway_auth
+from app.api.deps import AuthenticatedUser, get_authenticated_user, get_orchestrator, verify_gateway_auth
 from app.api.schemas import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -83,17 +83,17 @@ async def generate_agentic_plan(payload: PlanRequest) -> Dict[str, Any]:
     "/execute",
     response_model=ChatCompletionResponse,
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(verify_gateway_auth)],
 )
 async def execute_agentic_task(
     payload: ChatCompletionRequest,
-    x_user_id: Optional[str] = Header("default_user", alias="X-User-ID"),
+    user: AuthenticatedUser = Depends(get_authenticated_user),
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
     orchestrator: ChatOrchestrator = Depends(get_orchestrator),
 ) -> ChatCompletionResponse:
     """Executes a request through the agentic orchestration graph with optional multi-model collaboration."""
-    # Ensure user_id is populated from header if not provided in routing
-    if not payload.routing.user_id and x_user_id:
-        payload.routing.user_id = x_user_id
+    effective_user = x_user_id if (user.is_admin and x_user_id) else user.user_id
+    if not payload.routing.user_id or not user.is_admin:
+        payload.routing.user_id = effective_user
 
     # If calling /agentic/execute, enable collaboration by default if a strategy is requested
     if payload.routing.collaboration_strategy and not payload.routing.enable_collaboration:

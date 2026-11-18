@@ -145,7 +145,7 @@ class ChatOrchestrator:
         prompt_fp = hashlib.sha256(" ".join(m.content for m in domain_messages).encode("utf-8")).hexdigest()[:16]
         force_cache = bool(request.metadata and request.metadata.get("enable_cache"))
         cache_eligible = is_cache_eligible(params, force_cache=force_cache)
-        cache_key = compute_cache_key(model_alias, domain_messages, params) if cache_eligible else ""
+        cache_key = compute_cache_key(model_alias, domain_messages, params, tenant_id=user_id) if cache_eligible else ""
 
         # Check L2 Semantic & Exact Cache
         cached_comp, cache_status = await default_semantic_cache.get(

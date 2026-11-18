@@ -7,7 +7,7 @@ import json
 from typing import Optional, Union
 from fastapi import APIRouter, Depends, Header, status
 from fastapi.responses import StreamingResponse
-from app.api.deps import get_orchestrator, verify_gateway_auth
+from app.api.deps import AuthenticatedUser, get_authenticated_user, get_orchestrator, verify_gateway_auth
 from app.api.schemas import ChatCompletionRequest, ChatCompletionResponse
 from app.services.orchestrator import ChatOrchestrator
 
@@ -29,10 +29,16 @@ router = APIRouter(prefix="/v1", tags=["Chat"])
 )
 async def create_chat_completion(
     request: ChatCompletionRequest,
+    user: AuthenticatedUser = Depends(get_authenticated_user),
     x_request_id: Optional[str] = Header(None, alias="X-Request-ID"),
     orchestrator: ChatOrchestrator = Depends(get_orchestrator),
 ) -> Union[ChatCompletionResponse, StreamingResponse]:
     """Public chat generation endpoint supporting standard JSON and SSE streaming."""
+    # Enforce tenant identity
+    if not request.routing.user_id or not user.is_admin:
+        request.routing.user_id = user.user_id
+    if not request.user or not user.is_admin:
+        request.user = user.user_id
     if request.stream:
         async def event_generator():
             completion = await orchestrator.execute_chat(request, client_request_id=x_request_id)

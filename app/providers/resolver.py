@@ -6,6 +6,7 @@ import os
 import time
 from typing import List, Optional
 from app.core.config import settings
+from app.core.errors import ProviderAuthError
 from app.domain.byok import default_byok_manager
 from app.domain.circuit_breaker import default_circuit_registry
 from app.domain.entities import ChatMessage, GenerationParameters, NormalizedCompletion
@@ -17,7 +18,8 @@ from app.providers.openai_compatible import OpenAICompatibleAdapter
 
 def is_mock_mode_explicitly_enabled() -> bool:
     """Determines whether mock execution mode is explicitly enabled (test suite or explicit flag)."""
-    import os, sys
+    import os
+    import sys
     if os.environ.get("APP_ENV") == "test" or "pytest" in sys.modules:
         return True
     if os.environ.get("ENABLE_MOCK_GATEWAY", "").lower() in ("true", "1", "yes"):
@@ -104,16 +106,15 @@ class DynamicProviderAdapter(BaseProviderAdapter):
         effective_user_id = user_id or "default_user"
         meta = registry.get_model(model_alias)
         tier = meta.tier if meta else ("cheap" if "cheap" in model_alias else "strong")
+        provider_name = meta.provider if meta else "openai"
 
-        # 1. Check Dual-Agent Configuration from CredentialManager (Weak / Strong Agents)
+        # 1. User BYOK Credentials Priority: Check Dual-Agent Configuration from CredentialManager
         try:
             from agents.credential_manager import default_credential_manager
 
-            # Priority 1: Match by tier
             target_agent = "weak" if tier == "cheap" else "strong"
             cfg = default_credential_manager.get_agent_config(effective_user_id, target_agent)
 
-            # If target agent not configured, check the other agent as fallback
             if not cfg or not cfg.is_enabled or not cfg.encrypted_key:
                 other_agent = "strong" if target_agent == "weak" else "weak"
                 cfg = default_credential_manager.get_agent_config(effective_user_id, other_agent)
@@ -130,7 +131,19 @@ class DynamicProviderAdapter(BaseProviderAdapter):
         except Exception:
             pass
 
-        # 2. Check environment variables (GROQ_API_KEY, OPENAI_API_KEY)
+        # 2. User BYOK Credentials Priority: Check BYOK Manager for direct user provider key
+        if user_id:
+            user_key = default_byok_manager.get_plaintext_key(user_id, provider_name)
+            if user_key and _is_real_key(user_key):
+                user_base_url = default_byok_manager.get_base_url(user_id, provider_name) or settings.PROVIDER_BASE_URL
+                return RealAgentAdapter(
+                    provider=provider_name,
+                    api_key=user_key,
+                    model_id=model_alias,
+                    base_url=user_base_url,
+                )
+
+        # 3. Environment variables (Only when user has not provided their own keys)
         groq_env_key = os.environ.get("GROQ_API_KEY")
         if _is_real_key(groq_env_key) and (tier == "cheap" or not os.environ.get("OPENAI_API_KEY")):
             return RealAgentAdapter(
@@ -148,41 +161,32 @@ class DynamicProviderAdapter(BaseProviderAdapter):
                 model_id="gpt-4o" if tier == "strong" else "gpt-4o-mini",
             )
 
-        # 3. Check legacy BYOK credentials
-        if user_id:
-            provider = meta.provider if meta else "openai"
-            user_key = default_byok_manager.get_plaintext_key(user_id, provider)
-            if user_key:
-                user_base_url = default_byok_manager.get_base_url(user_id, provider) or settings.PROVIDER_BASE_URL
-                return OpenAICompatibleAdapter(api_key=user_key, base_url=user_base_url)
-
         # 4. Check dedicated cheap model credential
         if model_alias == settings.CHEAP_MODEL_ALIAS:
             api_key = settings.CHEAP_PROVIDER_API_KEY or settings.PROVIDER_API_KEY
             base_url = settings.CHEAP_PROVIDER_BASE_URL or settings.PROVIDER_BASE_URL
-            if api_key:
+            if api_key and _is_real_key(api_key):
                 return OpenAICompatibleAdapter(api_key=api_key, base_url=base_url)
 
         # 5. Check dedicated strong model credential
         if model_alias in (settings.STRONG_MODEL_ALIAS, settings.FALLBACK_MODEL_ALIAS):
             api_key = settings.STRONG_PROVIDER_API_KEY or settings.PROVIDER_API_KEY
             base_url = settings.STRONG_PROVIDER_BASE_URL or settings.PROVIDER_BASE_URL
-            if api_key:
+            if api_key and _is_real_key(api_key):
                 return OpenAICompatibleAdapter(api_key=api_key, base_url=base_url)
 
         # 6. Check general provider key
-        if settings.PROVIDER_API_KEY:
+        if settings.PROVIDER_API_KEY and _is_real_key(settings.PROVIDER_API_KEY):
             return OpenAICompatibleAdapter(
                 api_key=settings.PROVIDER_API_KEY,
                 base_url=settings.PROVIDER_BASE_URL,
             )
 
-        # 7. Check if mock mode is explicitly enabled
+        # 7. Explicit Mock Mode (test suite or explicit mock gateway setting)
         if is_mock_mode_explicitly_enabled():
             return self._mock_adapter
 
-        # In production / live execution, do NOT silently fall back to mock mode!
-        from app.core.errors import ProviderAuthError
+        # In production / live execution, NEVER silently fall back to mock mode
         target_agent = "weak" if tier == "cheap" else "strong"
         raise ProviderAuthError(
             f"No live API key configured for {target_agent} agent ({model_alias}). "

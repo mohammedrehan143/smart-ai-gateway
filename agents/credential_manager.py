@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, Literal, Optional
 from app.core.config import settings
 from app.core.crypto import decrypt_secret, encrypt_secret, mask_secret
 
@@ -79,6 +79,8 @@ class CredentialManager:
                 p.parent.mkdir(parents=True, exist_ok=True)
             conn = sqlite3.connect(self._db_path, timeout=10.0)
             conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA busy_timeout=5000;")
             return conn
         except Exception:
             return None
@@ -142,7 +144,11 @@ class CredentialManager:
         max_tokens: int = 1024,
         is_enabled: bool = True,
     ) -> AgentConfig:
-        """Encrypts and stores agent configuration in-memory and persistently in SQLite."""
+        """Encrypts and stores agent configuration in-memory and persistently in SQLite with SSRF protection."""
+        if base_url:
+            from app.core.network_security import validate_provider_base_url
+            base_url = validate_provider_base_url(base_url)
+
         now = time.time()
         encrypted = encrypt_secret(api_key.strip())
         key_tuple = (user_id, agent_type.lower())
@@ -208,18 +214,12 @@ class CredentialManager:
         return config
 
     def get_agent_config(self, user_id: str, agent_type: Literal["weak", "strong"]) -> Optional[AgentConfig]:
-        """Retrieves an agent configuration if present."""
+        """Retrieves an agent configuration strictly isolated for the specified user."""
         cfg = self._configs.get((user_id, agent_type.lower()))
         if cfg:
             return cfg
 
-        # If user_id is default/anonymous, check if any enabled config exists in memory
-        if user_id in ("default_user", "anonymous", ""):
-            for (uid, at), c in self._configs.items():
-                if at == agent_type.lower() and c.is_enabled:
-                    return c
-        
-        # Check SQLite if not in memory
+        # Check SQLite if not in memory (strictly matching user_id)
         conn = self._get_connection()
         if conn:
             try:
@@ -234,18 +234,6 @@ class CredentialManager:
                         (user_id, agent_type.lower()),
                     )
                     row = cursor.fetchone()
-                    if not row and user_id in ("default_user", "anonymous", ""):
-                        cursor = conn.execute(
-                            """
-                            SELECT user_id, agent_type, provider, encrypted_key, model_id,
-                                   base_url, temperature, max_tokens, is_enabled, created_at, updated_at
-                            FROM agent_configurations
-                            WHERE agent_type = ? AND is_enabled = 1
-                            ORDER BY updated_at DESC LIMIT 1
-                            """,
-                            (agent_type.lower(),),
-                        )
-                        row = cursor.fetchone()
                     if row:
                         cfg = AgentConfig(
                             user_id=row["user_id"],

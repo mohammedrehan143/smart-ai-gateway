@@ -1,0 +1,39 @@
+{
+  "version": "1.0.0",
+  "name": "routing_intelligence_evaluation_dataset",
+  "samples": [
+    {"id": "r01", "prompt": "Hi, how are you today?", "expected_complexity": "SIMPLE", "expected_tier": "cheap", "category": "general_chat"},
+    {"id": "r02", "prompt": "Good morning!", "expected_complexity": "SIMPLE", "expected_tier": "cheap", "category": "general_chat"},
+    {"id": "r03", "prompt": "What is Python?", "expected_complexity": "SIMPLE", "expected_tier": "cheap", "category": "general_chat"},
+    {"id": "r04", "prompt": "Define recursion in computer science.", "expected_complexity": "SIMPLE", "expected_tier": "cheap", "category": "general_chat"},
+    {"id": "r05", "prompt": "What is an HTTP 401 status code?", "expected_complexity": "SIMPLE", "expected_tier": "cheap", "category": "general_chat"},
+    {"id": "r06", "prompt": "Where is the capital of France?", "expected_complexity": "SIMPLE", "expected_tier": "cheap", "category": "general_chat"},
+    {"id": "r07", "prompt": "Who wrote Romeo and Juliet?", "expected_complexity": "SIMPLE", "expected_tier": "cheap", "category": "general_chat"},
+    {"id": "r08", "prompt": "Convert 10 kilometers to miles.", "expected_complexity": "SIMPLE", "expected_tier": "cheap", "category": "general_chat"},
+    {"id": "r09", "prompt": "Summarize this paragraph in one sentence: Artificial intelligence enables software to analyze patterns.", "expected_complexity": "MODERATE", "expected_tier": "cheap", "category": "summarization"},
+    {"id": "r10", "prompt": "Thank you for your help!", "expected_complexity": "SIMPLE", "expected_tier": "cheap", "category": "general_chat"},
+
+    {"id": "r11", "prompt": "Explain binary search with an example.", "expected_complexity": "MODERATE", "expected_tier": "cheap", "category": "coding"},
+    {"id": "r12", "prompt": "Write a Python function to reverse a string.", "expected_complexity": "MODERATE", "expected_tier": "cheap", "category": "coding"},
+    {"id": "r13", "prompt": "Write a function to check if a word is a palindrome in JavaScript.", "expected_complexity": "MODERATE", "expected_tier": "cheap", "category": "coding"},
+    {"id": "r14", "prompt": "Explain how DNS resolution works step by step.", "expected_complexity": "MODERATE", "expected_tier": "cheap", "category": "reasoning"},
+    {"id": "r15", "prompt": "Create an HTML form with username and password inputs.", "expected_complexity": "MODERATE", "expected_tier": "cheap", "category": "coding"},
+    {"id": "r16", "prompt": "Compare and contrast SQL vs NoSQL databases for ecommerce.", "expected_complexity": "MODERATE", "expected_tier": "cheap", "category": "reasoning"},
+    {"id": "r17", "prompt": "Draft a professional email requesting a project status update.", "expected_complexity": "MODERATE", "expected_tier": "cheap", "category": "general_chat"},
+    {"id": "r18", "prompt": "Calculate the compound interest on $5000 at 5% over 3 years.", "expected_complexity": "MODERATE", "expected_tier": "cheap", "category": "mathematics"},
+    {"id": "r19", "prompt": "Write a SQL query to find employees with salaries above department average.", "expected_complexity": "MODERATE", "expected_tier": "cheap", "category": "coding"},
+    {"id": "r20", "prompt": "Explain the mechanism of action of penicillin.", "expected_complexity": "MODERATE", "expected_tier": "cheap", "category": "reasoning"},
+
+    {"id": "r21", "prompt": "Design a scalable distributed banking architecture with two-phase commit.", "expected_complexity": "COMPLEX", "expected_tier": "strong", "category": "reasoning"},
+    {"id": "r22", "prompt": "Debug this complex asynchronous Python application with race conditions and deadlocks.", "expected_complexity": "COMPLEX", "expected_tier": "strong", "category": "coding"},
+    {"id": "r23", "prompt": "Architect a high-throughput microservices architecture with Kafka event sourcing and saga pattern.", "expected_complexity": "COMPLEX", "expected_tier": "strong", "category": "reasoning"},
+    {"id": "r24", "prompt": "Analyse a machine learning model suffering from overfitting and distribution shift under covariate drift.", "expected_complexity": "COMPLEX", "expected_tier": "strong", "category": "reasoning"},
+    {"id": "r25", "prompt": "Implement Paxos or Raft distributed consensus protocol from scratch.", "expected_complexity": "COMPLEX", "expected_tier": "strong", "category": "coding"},
+
+    {"id": "r26", "prompt": "Analyze this complicated multi-agent security incident with zero-day exploit and lateral movement.", "expected_complexity": "EXPERT", "expected_tier": "strong", "category": "reasoning"},
+    {"id": "r27", "prompt": "Perform formal verification and safety invariant proof for this distributed consensus protocol.", "expected_complexity": "EXPERT", "expected_tier": "strong", "category": "reasoning"},
+    {"id": "r28", "prompt": "Perform forensic analysis on a kernel memory corruption vulnerability CVE-2024-9123.", "expected_complexity": "EXPERT", "expected_tier": "strong", "category": "reasoning"},
+    {"id": "r29", "prompt": "Construct a zero-knowledge proof circuit with zk-SNARK for confidential identity verification.", "expected_complexity": "EXPERT", "expected_tier": "strong", "category": "reasoning"},
+    {"id": "r30", "prompt": "Prove Byzantine fault tolerance consensus under 3f+1 node conditions with temporal logic.", "expected_complexity": "EXPERT", "expected_tier": "strong", "category": "reasoning"}
+  ]
+}

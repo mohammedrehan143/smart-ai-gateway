@@ -1,15 +1,15 @@
-"""Unified Multi-Provider API Abstraction for Real LLM Execution."""
+"""Unified Multi-Provider API Abstraction for Real LLM Execution with Connection Pooling, Retries, and Circuit Breakers."""
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, Dict, List, Optional
 import httpx
 
-from app.core.prompts import GATEWAY_SYSTEM_PROMPT, sanitize_llm_response
-
+from app.core.config import settings
 from app.core.errors import (
     InvalidRequestError,
     ProviderAuthError,
@@ -18,6 +18,10 @@ from app.core.errors import (
     RequestTimeoutError,
 )
 from app.core.logging import get_logger
+from app.core.network_security import validate_provider_base_url
+from app.core.prompts import GATEWAY_SYSTEM_PROMPT, sanitize_llm_response
+from app.domain.circuit_breaker import default_circuit_registry
+from app.domain.retry import calculate_backoff, is_retryable_error
 
 logger = get_logger("agents.provider_manager")
 
@@ -49,11 +53,28 @@ class ProviderManager:
 
     def __init__(self, default_timeout_s: float = 60.0):
         self.default_timeout_s = default_timeout_s
+        self._client: Optional[httpx.AsyncClient] = None
+
+    def _get_http_client(self, timeout: float) -> httpx.AsyncClient:
+        """Returns or creates a pooled AsyncClient with connection reuse and keep-alive."""
+        if self._client is None or self._client.is_closed:
+            self._client = httpx.AsyncClient(
+                timeout=timeout,
+                limits=httpx.Limits(max_keepalive_connections=20, max_connections=100),
+            )
+        return self._client
+
+    async def aclose(self) -> None:
+        if self._client and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
 
     def resolve_base_url(self, provider: str, custom_base_url: Optional[str] = None) -> str:
-        """Determines appropriate API endpoint base URL."""
+        """Determines appropriate API endpoint base URL with SSRF protection."""
         if custom_base_url and custom_base_url.strip():
-            return custom_base_url.strip().rstrip("/")
+            validated = validate_provider_base_url(custom_base_url.strip())
+            if validated:
+                return validated
         p = provider.lower().strip()
         return PROVIDER_DEFAULT_BASE_URLS.get(p, "https://api.openai.com/v1").rstrip("/")
 
@@ -65,7 +86,6 @@ class ProviderManager:
                 "anthropic-version": "2023-06-01",
                 "Content-Type": "application/json",
             }
-        # OpenAI, Groq, Google OpenAI-compatible, custom OpenAI-compatible
         return {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
@@ -150,20 +170,66 @@ class ProviderManager:
         max_tokens: int = 1024,
         base_url: Optional[str] = None,
         timeout_seconds: Optional[float] = None,
+        max_attempts: Optional[int] = None,
     ) -> ProviderResponse:
-        """Executes a real non-streaming prompt completion against the upstream provider."""
-        start_time = time.time()
+        """Executes a real prompt completion with exponential backoff and circuit breaker tracking."""
         p = provider.lower().strip()
-        timeout = timeout_seconds or self.default_timeout_s
-        resolved_base = self.resolve_base_url(p, base_url)
+        attempts_limit = max_attempts or getattr(settings, "MAX_PROVIDER_ATTEMPTS", 3)
+        last_exception: Optional[Exception] = None
 
-        # Ensure standard system prompt is present to prevent model identity confusion or policy leak
+        for attempt in range(1, attempts_limit + 1):
+            try:
+                resp = await self._execute_single_attempt(
+                    provider=p,
+                    api_key=api_key,
+                    model_id=model_id,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    base_url=base_url,
+                    timeout_seconds=timeout_seconds,
+                )
+                default_circuit_registry.record_outcome(model_id, success=True)
+                return resp
+            except Exception as exc:
+                last_exception = exc
+                is_retryable = is_retryable_error(exc) or isinstance(exc, (httpx.TimeoutException, httpx.RequestError))
+                if not is_retryable or attempt >= attempts_limit:
+                    default_circuit_registry.record_outcome(model_id, success=False, error=exc)
+                    raise exc
+
+                retry_after_s = getattr(exc, "retry_after_s", None)
+                backoff_delay = calculate_backoff(attempt, retry_after_s=retry_s if (retry_s := retry_after_s) else None)
+                logger.warning(
+                    f"Provider execution attempt {attempt} for {p}:{model_id} failed ({exc}). Retrying in {backoff_delay:.2f}s..."
+                )
+                await asyncio.sleep(backoff_delay)
+
+        if last_exception:
+            raise last_exception
+        raise ProviderServerError(f"Failed to execute request on {p}:{model_id} after {attempts_limit} attempts")
+
+    async def _execute_single_attempt(
+        self,
+        provider: str,
+        api_key: str,
+        model_id: str,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.2,
+        max_tokens: int = 1024,
+        base_url: Optional[str] = None,
+        timeout_seconds: Optional[float] = None,
+    ) -> ProviderResponse:
+        start_time = time.time()
+        timeout = timeout_seconds or self.default_timeout_s
+        resolved_base = self.resolve_base_url(provider, base_url)
+
         has_system = any(m.get("role") == "system" for m in messages)
         formatted_messages = list(messages)
         if not has_system:
             formatted_messages = [{"role": "system", "content": GATEWAY_SYSTEM_PROMPT}] + formatted_messages
 
-        if p == "anthropic" and "api.anthropic.com" in resolved_base:
+        if provider == "anthropic" and "api.anthropic.com" in resolved_base:
             return await self._execute_anthropic_native(
                 api_key=api_key,
                 model_id=model_id,
@@ -175,10 +241,9 @@ class ProviderManager:
                 start_time=start_time,
             )
 
-        # Standard OpenAI-compatible format (OpenAI, Groq, Google OpenAI endpoint, Custom)
         url = f"{resolved_base}/chat/completions"
-        headers = self._build_headers(p, api_key)
-        
+        headers = self._build_headers(provider, api_key)
+
         is_modern_or_reasoning = (
             "openai/" in model_id.lower()
             or "gpt-oss" in model_id.lower()
@@ -203,26 +268,25 @@ class ProviderManager:
             if temperature is not None:
                 payload["temperature"] = temperature
 
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            try:
-                response = await client.post(url, json=payload, headers=headers)
-                # Auto-recovery: If provider rejects max_tokens in favor of max_completion_tokens
-                if response.status_code == 400 and ("max_completion_tokens" in response.text or "max_tokens" in response.text):
-                    if "max_tokens" in payload:
-                        payload.pop("max_tokens", None)
-                        payload["max_completion_tokens"] = max_tokens
-                        response = await client.post(url, json=payload, headers=headers)
-            except httpx.TimeoutException as te:
-                raise RequestTimeoutError(f"Request to {p} timed out after {timeout}s") from te
-            except httpx.RequestError as re:
-                raise ProviderServerError(f"Network transport failure contacting {p}: {re}") from re
+        client = self._get_http_client(timeout)
+        try:
+            response = await client.post(url, json=payload, headers=headers)
+            if response.status_code == 400 and ("max_completion_tokens" in response.text or "max_tokens" in response.text):
+                if "max_tokens" in payload:
+                    payload.pop("max_tokens", None)
+                    payload["max_completion_tokens"] = max_tokens
+                    response = await client.post(url, json=payload, headers=headers)
+        except httpx.TimeoutException as te:
+            raise RequestTimeoutError(f"Request to {provider} timed out after {timeout}s") from te
+        except httpx.RequestError as re:
+            raise ProviderServerError(f"Network transport failure contacting {provider}: {re}") from re
 
-            self._handle_error_response(response, p)
-            data = response.json()
+        self._handle_error_response(response, provider)
+        data = response.json()
 
         choices = data.get("choices", [])
         if not choices:
-            raise ProviderServerError(f"Malformed response from {p}: no choices array returned")
+            raise ProviderServerError(f"Malformed response from {provider}: no choices array returned")
 
         first_msg = choices[0].get("message", {})
         raw_content = first_msg.get("content") or ""
@@ -240,7 +304,7 @@ class ProviderManager:
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
             model=model_id,
-            provider=p,
+            provider=provider,
             latency_ms=latency_ms,
             finish_reason=finish_reason,
             raw_response=data,
@@ -257,11 +321,9 @@ class ProviderManager:
         timeout: float,
         start_time: float,
     ) -> ProviderResponse:
-        """Executes request via native Anthropic Messages API."""
         url = f"{base_url}/messages"
         headers = self._build_headers("anthropic", api_key)
 
-        # Separate system message if present
         system_text = ""
         user_assistant_messages = []
         for m in messages:
@@ -279,16 +341,16 @@ class ProviderManager:
         if system_text:
             payload["system"] = system_text
 
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            try:
-                response = await client.post(url, json=payload, headers=headers)
-            except httpx.TimeoutException as te:
-                raise RequestTimeoutError(f"Anthropic request timed out after {timeout}s") from te
-            except httpx.RequestError as re:
-                raise ProviderServerError(f"Network error contacting Anthropic: {re}") from re
+        client = self._get_http_client(timeout)
+        try:
+            response = await client.post(url, json=payload, headers=headers)
+        except httpx.TimeoutException as te:
+            raise RequestTimeoutError(f"Anthropic request timed out after {timeout}s") from te
+        except httpx.RequestError as re:
+            raise ProviderServerError(f"Network error contacting Anthropic: {re}") from re
 
-            self._handle_error_response(response, "anthropic")
-            data = response.json()
+        self._handle_error_response(response, "anthropic")
+        data = response.json()
 
         content_blocks = data.get("content", [])
         text = "".join(b.get("text", "") for b in content_blocks if b.get("type") == "text")
@@ -320,7 +382,6 @@ class ProviderManager:
         base_url: Optional[str] = None,
         timeout_seconds: Optional[float] = None,
     ) -> AsyncGenerator[Dict[str, Any], None]:
-        """Streams real token chunks from upstream provider over Server-Sent Events."""
         p = provider.lower().strip()
         timeout = timeout_seconds or self.default_timeout_s
         resolved_base = self.resolve_base_url(p, base_url)
@@ -335,7 +396,6 @@ class ProviderManager:
             or "deepseek-r1" in model_id.lower()
         )
 
-        # Ensure standard system prompt is present to prevent identity confusion or policy leak
         has_system = any(m.get("role") == "system" for m in messages)
         formatted_messages = list(messages)
         if not has_system:
@@ -373,7 +433,6 @@ class ProviderManager:
                             choices = chunk.get("choices", [])
                             if choices:
                                 delta = choices[0].get("delta", {})
-                                # Exclude pure internal reasoning or thought chunks
                                 if not delta.get("content") and (delta.get("reasoning") or delta.get("reasoning_content")):
                                     continue
                             yield chunk

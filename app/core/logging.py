@@ -36,11 +36,16 @@ class JsonFormatter(logging.Formatter):
     """Formats log records as structured JSON."""
 
     def format(self, record: logging.LogRecord) -> str:
+        from app.core.crypto import redact_secrets_from_text
+
+        raw_message = record.getMessage()
+        sanitized_message = redact_secrets_from_text(raw_message)
+
         log_obj: Dict[str, Any] = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "level": record.levelname,
             "logger": record.name,
-            "message": record.getMessage(),
+            "message": sanitized_message,
             "trace_id": correlation_trace_id.get(""),
             "request_id": correlation_request_id.get(""),
         }

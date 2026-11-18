@@ -11,7 +11,7 @@ from agents.weak_agent import WeakAgent
 
 def test_credential_manager_storage_and_masking():
     cm = CredentialManager()
-    
+
     # Store weak agent key
     weak_cfg = cm.store_agent_config(
         user_id="user_123",
@@ -94,7 +94,7 @@ def test_router_selects_strong_agent_for_complex_and_expert_tasks(prompt, expect
 
 def test_router_manual_override():
     router = IntelligentRouter()
-    
+
     # Simple prompt forced to strong
     d_strong = router.classify_and_route("What is 2+2?", manual_agent="strong")
     assert d_strong.agent == "strong"

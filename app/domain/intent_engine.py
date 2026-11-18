@@ -1,4 +1,4 @@
-"""Multi-dimensional Intent and Task Intelligence Engine."""
+"""Multi-dimensional Intent and Task Intelligence Engine with History-Aware Isolation."""
 
 from __future__ import annotations
 
@@ -6,7 +6,12 @@ import re
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, List, Optional, Set
-from app.domain.classifier import ComplexityClassifier, ComplexityLevel
+from app.domain.classifier import (
+    ComplexityClassifier,
+    ComplexityLevel,
+    SIMPLE_DEFINITION_PATTERNS,
+    SIMPLE_GREETING_PATTERNS,
+)
 from app.domain.entities import ChatMessage
 
 
@@ -85,7 +90,12 @@ TOOL_TRIGGER_PATTERNS = [
 
 
 class IntentIntelligenceEngine:
-    """Understands user requests across multi-dimensional intent, capabilities, and execution requirements."""
+    """Understands user requests across multi-dimensional intent, capabilities, and execution requirements.
+
+    Guarantees: Uses the latest user message as the primary classification signal.
+    Past conversation history provides context for token budgets, but NEVER falsely inflates
+    the complexity or alters the intent category of a simple latest message (e.g. 'Hi').
+    """
 
     @classmethod
     def analyze(
@@ -96,17 +106,23 @@ class IntentIntelligenceEngine:
         quality_threshold: Optional[float] = None,
         max_cost_limit: Optional[float] = None,
     ) -> TaskProfile:
-        full_text = " ".join(m.content for m in messages).strip()
-        lower_text = full_text.lower()
         signals: List[str] = []
 
-        # 1. Complexity Classification
+        # 1. Extract latest user turn as primary signal
+        user_msgs = [m for m in messages if m.role == "user"]
+        latest_user_msg = user_msgs[-1].content.strip() if user_msgs else (messages[-1].content.strip() if messages else "")
+        target_text = latest_user_msg
+        lower_target = target_text.lower()
+
+        full_text = " ".join(m.content for m in messages).strip()
+
+        # 2. Complexity Classification (focused on latest prompt)
         comp_res = ComplexityClassifier.classify(messages, has_tools=bool(tools), format_json=format_json)
         complexity = comp_res.complexity
         capabilities: Set[str] = set(comp_res.required_capabilities)
         signals.extend(comp_res.signals)
 
-        # 2. Category Detection
+        # 3. Category Detection
         category = TaskCategory.GENERAL_CHAT
         intent = "general_query"
         output_format = "markdown"
@@ -124,22 +140,35 @@ class IntentIntelligenceEngine:
                     if fn_name:
                         tool_requirements.append(fn_name)
 
-        # Multimodal detection
-        elif any(re.search(p, lower_text) for p in MULTIMODAL_PATTERNS):
+        # Check for simple greetings and basic definitions first on latest target
+        elif any(re.search(p, lower_target) for p in SIMPLE_GREETING_PATTERNS):
+            category = TaskCategory.GENERAL_CHAT
+            intent = "conversational_greeting"
+            output_format = "markdown"
+            signals.append("greeting_intent")
+
+        elif any(re.search(p, lower_target) for p in SIMPLE_DEFINITION_PATTERNS) and len(target_text.split()) < 35:
+            category = TaskCategory.GENERAL_CHAT
+            intent = "factual_lookup"
+            output_format = "markdown"
+            signals.append("definition_intent")
+
+        # Multimodal detection on latest message
+        elif any(re.search(p, lower_target) for p in MULTIMODAL_PATTERNS):
             category = TaskCategory.MULTIMODAL
             intent = "multimodal_processing"
             capabilities.add("multimodal")
             signals.append("multimodal_intent")
 
-        # Mathematics detection
-        elif any(re.search(p, lower_text) for p in MATH_PATTERNS) and not any(k in lower_text for k in ["binary search", "reverse string"]):
+        # Mathematics detection on latest message
+        elif any(re.search(p, lower_target) for p in MATH_PATTERNS) and not any(k in lower_target for k in ["binary search", "reverse string"]):
             category = TaskCategory.MATHEMATICS
             intent = "mathematical_computation"
             capabilities.update(["math", "deep_reasoning"])
             signals.append("mathematics_intent")
 
         # Structured output format detection
-        elif format_json or any(re.search(p, lower_text) for p in STRUCTURED_PATTERNS):
+        elif format_json or any(re.search(p, lower_target) for p in STRUCTURED_PATTERNS):
             category = TaskCategory.STRUCTURED_GENERATION
             intent = "structured_data_generation"
             output_format = "json"
@@ -147,31 +176,31 @@ class IntentIntelligenceEngine:
             signals.append("structured_output_intent")
 
         # Summarization detection
-        elif any(re.search(p, lower_text) for p in SUMMARIZATION_PATTERNS):
+        elif any(re.search(p, lower_target) for p in SUMMARIZATION_PATTERNS):
             category = TaskCategory.SUMMARIZATION
             intent = "text_summarization"
             capabilities.add("summarization")
             signals.append("summarization_intent")
 
         # Deep Research detection
-        elif any(re.search(p, lower_text) for p in RESEARCH_PATTERNS):
+        elif any(re.search(p, lower_target) for p in RESEARCH_PATTERNS):
             category = TaskCategory.RESEARCH
             intent = "in_depth_research"
             capabilities.update(["deep_reasoning", "qa"])
             signals.append("research_intent")
 
-        # Coding detection
+        # Coding detection on latest message
         elif any(k in capabilities for k in ["code_simple", "complex_code", "debugging"]) or any(
-            k in lower_text for k in ["def ", "class ", "function", "write a python", "debug", "refactor", "binary search", "reverse a string", "bug", "traceback"]
+            k in lower_target for k in ["def ", "class ", "function", "write a python", "debug", "refactor", "binary search", "reverse a string", "bug", "traceback"]
         ):
             category = TaskCategory.CODING
             intent = "code_generation_or_debug"
             output_format = "code"
             signals.append("coding_intent")
 
-        # Reasoning & Architecture detection
+        # Reasoning & Architecture detection on latest message
         elif any(k in capabilities for k in ["architecture", "deep_reasoning", "security_analysis"]) or any(
-            k in lower_text for k in ["architecture", "consensus", "trade-off", "distributed", "security incident"]
+            k in lower_target for k in ["architecture", "consensus", "trade-off", "distributed", "security incident"]
         ):
             category = TaskCategory.REASONING
             intent = "analytical_reasoning"
@@ -179,9 +208,9 @@ class IntentIntelligenceEngine:
 
         # Ambiguity Scoring
         ambiguity = 0.05
-        if len(full_text.split()) < 4 and category == TaskCategory.GENERAL_CHAT:
+        if len(target_text.split()) < 4 and category == TaskCategory.GENERAL_CHAT:
             ambiguity = 0.40
-        elif "?" in full_text and any(k in lower_text for k in ["maybe", "either", "could you clarify", "it depends"]):
+        elif "?" in target_text and any(k in lower_target for k in ["maybe", "either", "could you clarify", "it depends"]):
             ambiguity = 0.35
 
         # Latency sensitivity
@@ -211,6 +240,7 @@ class IntentIntelligenceEngine:
                 "estimated_tokens": token_est,
                 "message_count": len(messages),
                 "has_context_history": len(messages) > 1,
+                "latest_turn_chars": len(target_text),
             },
             output_format=output_format,
             tool_requirements=tool_requirements,
@@ -223,4 +253,3 @@ class IntentIntelligenceEngine:
 
 
 default_intent_engine = IntentIntelligenceEngine()
-

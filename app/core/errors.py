@@ -100,6 +100,28 @@ class ProviderUnavailableError(GatewayError):
         )
 
 
+class ForbiddenError(GatewayError):
+    def __init__(self, message: str = "Access forbidden", trace_id: Optional[str] = None):
+        super().__init__(
+            message=message,
+            error_type="forbidden",
+            status_code=403,
+            retryable=False,
+            trace_id=trace_id,
+        )
+
+
+class SSRFSecurityError(GatewayError):
+    def __init__(self, message: str = "Destination IP or URL is not permitted (SSRF protection)", trace_id: Optional[str] = None):
+        super().__init__(
+            message=message,
+            error_type="ssrf_violation",
+            status_code=400,
+            retryable=False,
+            trace_id=trace_id,
+        )
+
+
 class TelemetryDegradedError(GatewayError):
     def __init__(self, message: str = "Telemetry persistence degraded", trace_id: Optional[str] = None):
         super().__init__(

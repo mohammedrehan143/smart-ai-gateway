@@ -35,18 +35,21 @@ COMPLEX_PATTERNS = [
     r"\b(debug.*asynchronous|debug.*concurrency|deadlock|race condition|memory leak|heap dump|segfault)\b",
     r"\b(profiling bottleneck|distributed deadlock|goroutine leak|lock contention)\b",
     r"\b(trade-off analysis between.*and.*under|compare the pros and cons of|pros and cons of)\b",
+    r"\b(overfitting and distribution shift|distribution shift|covariate shift|concept drift|gradient vanishing|transformer attention mechanism)\b",
     r"(review|audit|debug|optimize)\s+(?:this|the)?\s*(?:python|javascript|typescript|c\+\+|code|implementation|function)?[:\s\n]+```",
     r"```[a-zA-Z0-9_\+\-]*\n[\s\S]{20,}\n```",  # Substantial multi-line embedded code snippet requiring deep inspection
 ]
 
 # Moderate Regex Patterns: Explanations, ordinary coding, structured writing, multi-step tasks, basic debugging
 MODERATE_PATTERNS = [
-    r"\b(explain\b.*\bexample|how does\b.*\bwork|explain the mechanism of|compare and contrast)\b",
+    r"\b(explain\b.*(?:example|step by step|mechanism of|how it works)|how does\b.*\bwork|compare and contrast)\b",
     r"\b(write a\s+(?:python|javascript|typescript|sql|c\+\+|java|go|rust)?\s*(?:function|script|query|component|class|program))\b",
     r"\b(reverse a string|binary search|bubble sort|fibonacci|palindrome|linked list|two sum|fizzbuzz)\b",
-    r"\b(create a\s+(?:button|form|endpoint|route|api|modal))\b",
+    r"\b(create (?:a|an)\s+(?:[\w\-]+\s+)?(?:button|form|endpoint|route|api|modal|component))\b",
     r"\b(draft a\s+(?:polite|professional)?\s*(?:email|letter|proposal|memo|cover letter|outline|blog post))\b",
-    r"\b(step 1.*step 2|first.*then.*finally)\b",
+    r"\b(step 1.*step 2|first.*then.*finally|step by step)\b",
+    r"\b(calculate (?:the\s+)?(?:compound interest|interest|total|area|volume|perimeter|standard deviation))\b",
+    r"\b(summarize|summary of|tl;dr|tldr|key takeaways|executive summary|distill this)\b",
     r"\b(fix (?:this|the)?\s*(?:bug|error|issue|exception)|traceback:)\b",
     r"\b(debug this|help fix)\b",
 ]

@@ -5,8 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from typing import Any, AsyncGenerator, Dict, List, Literal, Optional
 
 from agents.credential_manager import CredentialManager, default_credential_manager
@@ -15,12 +14,10 @@ from agents.strong_agent import StrongAgent, default_strong_agent
 from agents.weak_agent import AgentExecutionResult, WeakAgent, default_weak_agent
 from app.api.deps import get_repository
 from app.core.config import settings
-from app.core.cost import default_cost_calculator
-from app.core.errors import GatewayError, InvalidRequestError, RateLimitError
+from app.core.errors import InvalidRequestError
 from app.core.logging import get_logger
 from app.domain.entities import (
     GatewayRequestRecord,
-    RoutingDecision as EntityRoutingDecision,
     UsageRecord,
     generate_id,
 )
@@ -119,14 +116,18 @@ class ExecutionEngine:
         actual_agent_type = chosen_agent_type
 
         # 2. Primary agent execution with retry
+        timeout_s = getattr(settings, "REQUEST_TIMEOUT_SECONDS", 30.0)
         for attempt in range(max_retries + 1):
             try:
-                result = await agent_obj.execute(
-                    user_id=user_id,
-                    prompt=prompt,
-                    conversation_history=conversation_history,
-                    temperature_override=temperature,
-                    max_tokens_override=max_tokens,
+                result = await asyncio.wait_for(
+                    agent_obj.execute(
+                        user_id=user_id,
+                        prompt=prompt,
+                        conversation_history=conversation_history,
+                        temperature_override=temperature,
+                        max_tokens_override=max_tokens,
+                    ),
+                    timeout=timeout_s,
                 )
                 break
             except Exception as exc:
@@ -144,12 +145,15 @@ class ExecutionEngine:
                 fallback_reason = f"{chosen_agent_type.capitalize()} Agent encountered error: {execution_error}. Fallback to {fallback_type.capitalize()} Agent initiated."
                 logger.info(fallback_reason)
                 try:
-                    result = await fallback_agent_obj.execute(
-                        user_id=user_id,
-                        prompt=prompt,
-                        conversation_history=conversation_history,
-                        temperature_override=temperature,
-                        max_tokens_override=max_tokens,
+                    result = await asyncio.wait_for(
+                        fallback_agent_obj.execute(
+                            user_id=user_id,
+                            prompt=prompt,
+                            conversation_history=conversation_history,
+                            temperature_override=temperature,
+                            max_tokens_override=max_tokens,
+                        ),
+                        timeout=timeout_s,
                     )
                     fallback_used = True
                     actual_agent_type = fallback_type

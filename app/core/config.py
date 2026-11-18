@@ -1,6 +1,7 @@
 """Configuration and environment settings with production validation and Render support."""
 
-from typing import List, Literal, Optional
+import json
+from typing import Dict, List, Literal, Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,6 +20,17 @@ class Settings(BaseSettings):
 
     # Gateway Auth (Strictly required in production)
     GATEWAY_API_KEY: Optional[str] = None
+    # Additional allowed API keys for key rotation
+    ALLOWED_API_KEYS: List[str] = []
+    # Revoked API keys list
+    REVOKED_API_KEYS: List[str] = []
+    # JSON-encoded dictionary of tenant API keys mapping api_key -> user_id
+    TENANT_API_KEYS: str = "{}"
+
+    # Dedicated Credential Encryption Master Key (strictly required in production)
+    ENCRYPTION_MASTER_KEY: Optional[str] = None
+    # Previous encryption keys for seamless key rotation
+    ENCRYPTION_PREVIOUS_KEYS: List[str] = []
 
     # Persistence (Supports SQLite and PostgreSQL)
     DATABASE_URL: str = "sqlite:///./gateway_traces.db"
@@ -40,6 +52,12 @@ class Settings(BaseSettings):
     MAX_OUTPUT_TOKENS: int = 4096
     MAX_REQUEST_BODY_BYTES: int = 1_048_576  # 1 MB protection against DoS
     RATE_LIMIT_RPM: int = 120                 # Default 120 requests/minute per client
+    RATE_LIMIT_ENABLED: bool = True
+    MAX_FAILED_AUTH_ATTEMPTS: int = 10        # Brute-force protection: max failed auths in window
+
+    # SSRF & Network Protection
+    SSRF_PROTECTION_ENABLED: bool = True
+    ALLOW_LOOPBACK_IN_DEV: bool = True        # Permitted only in local/test for mock testing
 
     # Versioning
     ROUTING_POLICY_VERSION: str = "1.0.0"
@@ -71,6 +89,53 @@ class Settings(BaseSettings):
     @property
     def is_dev_mode(self) -> bool:
         return self.APP_ENV in ("local", "test") and not self.GATEWAY_API_KEY
+
+    def get_tenant_key_mappings(self) -> Dict[str, str]:
+        """Parses TENANT_API_KEYS JSON string to dictionary mapping api_key -> user_id."""
+        if not self.TENANT_API_KEYS:
+            return {}
+        try:
+            parsed = json.loads(self.TENANT_API_KEYS)
+            return parsed if isinstance(parsed, dict) else {}
+        except Exception:
+            return {}
+
+    def validate_production_security(self) -> None:
+        """Enforces critical production security invariants at application startup.
+
+        Raises:
+            ValueError: If critical security configurations are missing or insecure in production.
+        """
+        if self.APP_ENV == "production":
+            # 1. GATEWAY_API_KEY must be configured
+            if not self.GATEWAY_API_KEY or len(self.GATEWAY_API_KEY.strip()) < 16:
+                raise ValueError(
+                    "Production Security Error: GATEWAY_API_KEY must be configured with a minimum of 16 characters in production mode."
+                )
+
+            # 2. ENCRYPTION_MASTER_KEY must be configured and independent
+            if not self.ENCRYPTION_MASTER_KEY or len(self.ENCRYPTION_MASTER_KEY.strip()) < 16:
+                raise ValueError(
+                    "Production Security Error: Dedicated ENCRYPTION_MASTER_KEY must be configured with a minimum of 16 characters in production mode."
+                )
+
+            # 3. Dedicated master key must not be identical to GATEWAY_API_KEY
+            if self.ENCRYPTION_MASTER_KEY.strip() == self.GATEWAY_API_KEY.strip():
+                raise ValueError(
+                    "Production Security Error: ENCRYPTION_MASTER_KEY must be independent and not identical to GATEWAY_API_KEY."
+                )
+
+            # 4. Wildcard CORS is strictly forbidden with credentials in production
+            if "*" in self.ALLOWED_CORS_ORIGINS:
+                raise ValueError(
+                    "Production Security Error: Wildcard '*' in ALLOWED_CORS_ORIGINS is prohibited in production mode. Specify trusted origins."
+                )
+
+            # 5. Mock gateway cannot be enabled in production
+            if self.ENABLE_MOCK_GATEWAY:
+                raise ValueError(
+                    "Production Security Error: ENABLE_MOCK_GATEWAY cannot be set to true in production mode."
+                )
 
 
 settings = Settings()

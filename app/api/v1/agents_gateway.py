@@ -11,9 +11,8 @@ from agents import (
     default_credential_manager,
     default_execution_engine,
     default_provider_manager,
-    default_router,
 )
-from app.api.deps import verify_gateway_auth
+from app.api.deps import AuthenticatedUser, get_authenticated_user, verify_gateway_auth
 
 router = APIRouter(tags=["Agents & Gateway"])
 
@@ -49,6 +48,13 @@ class GatewayExecuteRequest(BaseModel):
     conversation_history: Optional[List[Dict[str, str]]] = Field(None, description="Multi-turn conversation context")
 
 
+def _resolve_effective_user(user: AuthenticatedUser, x_user_id: Optional[str]) -> str:
+    """Enforces that only admin callers can act on behalf of another user_id."""
+    if user.is_admin and x_user_id:
+        return x_user_id
+    return user.user_id
+
+
 # ---------------------------------------------------------------------------
 # 1. Agent Configuration Endpoints (/api/agents)
 # ---------------------------------------------------------------------------
@@ -56,16 +62,16 @@ class GatewayExecuteRequest(BaseModel):
 @router.post(
     "/api/agents/configure",
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(verify_gateway_auth)],
     summary="Configure Weak or Strong Agent with provider, encrypted API key, and model parameters",
 )
 async def configure_agent(
     payload: AgentConfigureRequest,
-    x_user_id: Optional[str] = Header("default_user", alias="X-User-ID"),
+    user: AuthenticatedUser = Depends(get_authenticated_user),
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
 ) -> Dict[str, Any]:
-    user_id = x_user_id or "default_user"
+    effective_user = _resolve_effective_user(user, x_user_id)
     config = default_credential_manager.store_agent_config(
-        user_id=user_id,
+        user_id=effective_user,
         agent_type=payload.agent_type,
         provider=payload.provider,
         api_key=payload.api_key,
@@ -84,16 +90,16 @@ async def configure_agent(
 @router.get(
     "/api/agents/config",
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(verify_gateway_auth)],
     summary="Get current configurations for Weak and Strong Agents (with masked credentials)",
 )
 async def get_agent_configurations(
-    x_user_id: Optional[str] = Header("default_user", alias="X-User-ID"),
+    user: AuthenticatedUser = Depends(get_authenticated_user),
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
 ) -> Dict[str, Any]:
-    user_id = x_user_id or "default_user"
-    configs = default_credential_manager.list_agent_configs(user_id)
+    effective_user = _resolve_effective_user(user, x_user_id)
+    configs = default_credential_manager.list_agent_configs(effective_user)
     return {
-        "user_id": user_id,
+        "user_id": effective_user,
         "agents": configs,
     }
 
@@ -101,20 +107,20 @@ async def get_agent_configurations(
 @router.post(
     "/api/agents/test",
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(verify_gateway_auth)],
     summary="Test connectivity with a model provider using real API request probe",
 )
 async def test_agent_connection(
     payload: AgentTestRequest,
-    x_user_id: Optional[str] = Header("default_user", alias="X-User-ID"),
+    user: AuthenticatedUser = Depends(get_authenticated_user),
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
 ) -> Dict[str, Any]:
-    user_id = x_user_id or "default_user"
+    effective_user = _resolve_effective_user(user, x_user_id)
     api_key = payload.api_key
 
     # If api_key not provided or masked, fetch from saved config
     if not api_key or "..." in api_key or api_key == "********":
         if payload.agent_type:
-            saved = default_credential_manager.get_agent_config(user_id, payload.agent_type)
+            saved = default_credential_manager.get_agent_config(effective_user, payload.agent_type)
             if saved:
                 api_key = saved.get_plaintext_key()
                 if not payload.base_url:
@@ -138,15 +144,15 @@ async def test_agent_connection(
 @router.delete(
     "/api/agents/config",
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(verify_gateway_auth)],
     summary="Delete or reset Weak Agent, Strong Agent, or all agent configurations",
 )
 async def delete_agent_configuration(
     agent_type: Optional[Literal["weak", "strong"]] = Query(None, description="Specific agent type to delete"),
-    x_user_id: Optional[str] = Header("default_user", alias="X-User-ID"),
+    user: AuthenticatedUser = Depends(get_authenticated_user),
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
 ) -> Dict[str, Any]:
-    user_id = x_user_id or "default_user"
-    deleted = default_credential_manager.delete_agent_config(user_id, agent_type)
+    effective_user = _resolve_effective_user(user, x_user_id)
+    deleted = default_credential_manager.delete_agent_config(effective_user, agent_type)
     return {
         "status": "deleted" if deleted else "not_found",
         "agent_type": agent_type or "all",
@@ -160,16 +166,16 @@ async def delete_agent_configuration(
 @router.post(
     "/api/gateway/execute",
     status_code=status.HTTP_200_OK,
-    dependencies=[Depends(verify_gateway_auth)],
     summary="Classify, route, and execute prompt using the appropriate agent with fallback",
 )
 async def execute_gateway_prompt(
     payload: GatewayExecuteRequest,
-    x_user_id: Optional[str] = Header("default_user", alias="X-User-ID"),
+    user: AuthenticatedUser = Depends(get_authenticated_user),
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
 ) -> Dict[str, Any]:
-    user_id = x_user_id or "default_user"
+    effective_user = _resolve_effective_user(user, x_user_id)
     res = await default_execution_engine.execute_prompt(
-        user_id=user_id,
+        user_id=effective_user,
         prompt=payload.prompt,
         mode=payload.mode,
         conversation_history=payload.conversation_history,
@@ -181,16 +187,16 @@ async def execute_gateway_prompt(
 
 @router.post(
     "/api/gateway/stream",
-    dependencies=[Depends(verify_gateway_auth)],
     summary="Stream real-time token execution over Server-Sent Events",
 )
 async def stream_gateway_prompt(
     payload: GatewayExecuteRequest,
-    x_user_id: Optional[str] = Header("default_user", alias="X-User-ID"),
+    user: AuthenticatedUser = Depends(get_authenticated_user),
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
 ):
-    user_id = x_user_id or "default_user"
+    effective_user = _resolve_effective_user(user, x_user_id)
     generator = default_execution_engine.stream_prompt(
-        user_id=user_id,
+        user_id=effective_user,
         prompt=payload.prompt,
         mode=payload.mode,
         conversation_history=payload.conversation_history,

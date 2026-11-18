@@ -56,6 +56,10 @@ else
     export APP_PORT="$PORT"
     export APP_HOST=0.0.0.0
     export PYTHONPATH="$PROJECT_ROOT"
+    [ -z "$GATEWAY_API_KEY" ] && export GATEWAY_API_KEY="prod-gw-key-$(openssl rand -hex 16 2>/dev/null || date +%s%N)"
+    [ -z "$ENCRYPTION_MASTER_KEY" ] && export ENCRYPTION_MASTER_KEY="prod-enc-master-$(openssl rand -hex 16 2>/dev/null || date +%s%N)"
+    [ -z "$ALLOWED_CORS_ORIGINS" ] || [ "$ALLOWED_CORS_ORIGINS" = '["*"]' ] && export ALLOWED_CORS_ORIGINS='["http://localhost:8000","http://127.0.0.1:8000"]'
+    export ENABLE_MOCK_GATEWAY="false"
     
     nohup uvicorn app.main:app --host 0.0.0.0 --port "$PORT" > "$PROJECT_ROOT/gateway.log" 2>&1 &
     

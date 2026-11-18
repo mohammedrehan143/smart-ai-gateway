@@ -35,18 +35,18 @@ for i, p in enumerate(prompts, 1):
     except urllib.error.HTTPError as err:
         print(f"HTTP Error {err.code}: {err.read().decode('utf-8')}")
         sys.exit(1)
-        
+
     choice = data["choices"][0]["message"]
     routing = data.get("routing", {})
     usage = data.get("usage", {})
-    
+
     conversation.append({"role": "assistant", "content": choice["content"]})
-    
+
     level = routing.get("classification_level")
     agent = routing.get("agent")
     tier = routing.get("tier")
     model = data.get("model")
-    
+
     # Validation against requirements
     expected_agent = "Weak Agent" if i < 6 else "Strong Agent"
     expected_level = 1 if i < 6 else 3
@@ -54,7 +54,7 @@ for i, p in enumerate(prompts, 1):
     if not passed:
         all_passed = False
     status_symbol = "✔ PASS" if passed else "✖ FAIL"
-    
+
     print(f"Turn {i}: Prompt: \"{p}\"  [{status_symbol}]")
     print(f"  Classification Level: {level}")
     print(f"  Reason: {routing.get('reason')}")

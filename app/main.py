@@ -3,7 +3,7 @@
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 from pathlib import Path
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -23,6 +23,7 @@ from app.api.v1.models import router as models_router
 from app.api.v1.routing import router as routing_router
 from app.core.config import settings
 from app.core.errors import GatewayError
+from app.core.rate_limiter import default_rate_limiter
 from app.core.logging import (
     configure_logging,
     correlation_request_id,
@@ -37,6 +38,8 @@ logger = get_logger("app.main")
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Initializing Smart AI Gateway services...")
+    # Validate critical production security invariants
+    settings.validate_production_security()
     repo = await get_repository()
     await repo.initialize()
     logger.info("Database initialized successfully.")
@@ -63,6 +66,22 @@ app.add_middleware(
 
 @app.middleware("http")
 async def security_and_limits_middleware(request: Request, call_next):
+    # 0. Client Rate Limiting
+    client_ip = request.client.host if request.client else "127.0.0.1"
+    is_allowed, retry_after = default_rate_limiter.check_rate_limit(client_ip)
+    if not is_allowed:
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            headers={"Retry-After": str(retry_after)},
+            content={
+                "error": {
+                    "type": "rate_limited",
+                    "message": f"Rate limit exceeded ({settings.RATE_LIMIT_RPM} RPM). Retry in {retry_after}s.",
+                    "retryable": True,
+                }
+            },
+        )
+
     # 1. Protection against large payload DoS
     content_length = request.headers.get("content-length")
     if content_length and int(content_length) > settings.MAX_REQUEST_BODY_BYTES:
@@ -99,6 +118,38 @@ async def security_and_limits_middleware(request: Request, call_next):
         response.headers["X-Request-ID"] = req_id
 
     return response
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    headers = exc.headers or {}
+    if isinstance(exc.detail, dict) and "error" in exc.detail:
+        return JSONResponse(status_code=exc.status_code, content=exc.detail, headers=headers)
+    elif isinstance(exc.detail, dict):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "error": {
+                    "type": "http_error",
+                    "message": str(exc.detail),
+                    "retryable": False,
+                    "trace_id": correlation_trace_id.get(""),
+                }
+            },
+            headers=headers,
+        )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": {
+                "type": "http_error",
+                "message": str(exc.detail),
+                "retryable": False,
+                "trace_id": correlation_trace_id.get(""),
+            }
+        },
+        headers=headers,
+    )
 
 
 @app.exception_handler(GatewayError)

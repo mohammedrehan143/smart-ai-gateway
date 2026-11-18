@@ -66,21 +66,30 @@ class RoutingFeatures:
 
 
 def extract_features(messages: List[ChatMessage], has_tools: bool = False, format_json: bool = False) -> RoutingFeatures:
-    """Extract testable deterministic complexity signals and classification levels."""
-    full_text = " ".join(m.content for m in messages)
-    lower_text = full_text.lower()
+    """Extract testable deterministic complexity signals focused on the active user turn.
 
+    Guarantees: Prior history provides context for token budgets, but does not falsely
+    inflate feature flags (like has_code or is_debugging) for a simple greeting turn.
+    """
+    user_msgs = [m for m in messages if m.role == "user"]
+    latest_text = user_msgs[-1].content if user_msgs else (messages[-1].content if messages else "")
+    latest_lower = latest_text.lower()
+
+    full_text = " ".join(m.content for m in messages)
     char_length = len(full_text)
     estimated_tokens = max(1, char_length // 4)
     message_count = len(messages)
 
-    has_code = any(re.search(p, full_text, re.IGNORECASE) for p in CODE_PATTERNS)
-    is_debugging = any(re.search(p, lower_text) for p in ACTIVE_DEBUG_PATTERNS)
-    is_multistep = any(re.search(p, lower_text) for p in MULTISTEP_PATTERNS)
-    has_complex_reasoning = any(re.search(p, lower_text) for p in REASONING_PATTERNS)
-
-    # Classify complexity into SIMPLE, MODERATE, COMPLEX, EXPERT
+    # Classify complexity into SIMPLE, MODERATE, COMPLEX, EXPERT based on active turn
     classification = ComplexityClassifier.classify(messages, has_tools=has_tools, format_json=format_json)
+
+    # Extract feature flags directly from the active user turn
+    has_code = any(re.search(p, latest_text, re.IGNORECASE) for p in CODE_PATTERNS) or (
+        len(messages) > 1 and any(k in latest_lower for k in ("fix", "optimize", "refactor", "run", "code")) and any(re.search(p, full_text, re.IGNORECASE) for p in CODE_PATTERNS)
+    )
+    is_debugging = any(re.search(p, latest_lower) for p in ACTIVE_DEBUG_PATTERNS)
+    is_multistep = any(re.search(p, latest_lower) for p in MULTISTEP_PATTERNS)
+    has_complex_reasoning = any(re.search(p, latest_lower) for p in REASONING_PATTERNS)
 
     return RoutingFeatures(
         char_length=char_length,

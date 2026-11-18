@@ -97,6 +97,16 @@ if ($dockerAvailable -and $Mode -ne "native") {
     $env:APP_PORT = "$Port"
     $env:APP_HOST = "0.0.0.0"
     $env:PYTHONPATH = "$ProjectRoot"
+    if (-not $env:GATEWAY_API_KEY -or $env:GATEWAY_API_KEY.Length -lt 16) {
+        $env:GATEWAY_API_KEY = "prod-gw-key-$([guid]::NewGuid().ToString('N'))"
+    }
+    if (-not $env:ENCRYPTION_MASTER_KEY -or $env:ENCRYPTION_MASTER_KEY.Length -lt 16) {
+        $env:ENCRYPTION_MASTER_KEY = "prod-enc-master-$([guid]::NewGuid().ToString('N'))"
+    }
+    if (-not $env:ALLOWED_CORS_ORIGINS -or $env:ALLOWED_CORS_ORIGINS -eq '["*"]') {
+        $env:ALLOWED_CORS_ORIGINS = '["http://localhost:8000","http://127.0.0.1:8000"]'
+    }
+    $env:ENABLE_MOCK_GATEWAY = "false"
 
     if ($Foreground) {
         Write-Host "Running Uvicorn in foreground (Press Ctrl+C to terminate)..." -ForegroundColor Cyan
@@ -105,7 +115,9 @@ if ($dockerAvailable -and $Mode -ne "native") {
     }
 
     # Start detached process
-    $proc = Start-Process -FilePath $pythonExe -ArgumentList "-m uvicorn app.main:app --host 0.0.0.0 --port $Port" -WorkingDirectory $ProjectRoot -PassThru -WindowStyle Hidden
+    $logOut = Join-Path $ProjectRoot "gateway.log"
+    $logErr = Join-Path $ProjectRoot "gateway_err.log"
+    $proc = Start-Process -FilePath $pythonExe -ArgumentList "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "$Port" -WorkingDirectory $ProjectRoot -PassThru -WindowStyle Hidden -RedirectStandardOutput $logOut -RedirectStandardError $logErr
 
     $healthy = Test-GatewayHealth -TargetPort $Port
     if ($healthy) {

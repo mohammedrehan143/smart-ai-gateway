@@ -48,6 +48,10 @@ class SqliteTraceRepository(BaseTraceRepository):
 
     async def initialize(self) -> None:
         async with self._get_conn() as conn:
+            if self.db_path != ":memory:":
+                await conn.execute("PRAGMA journal_mode=WAL;")
+                await conn.execute("PRAGMA busy_timeout=5000;")
+                await conn.execute("PRAGMA synchronous=NORMAL;")
             await conn.executescript(
                 """
                 CREATE TABLE IF NOT EXISTS gateway_requests (
