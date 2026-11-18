@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import json
+import re
 import sys
 from typing import Dict, List, Optional
 import typer
+from smart_ai_cli.agent_runner import AutonomousAgentRunner
 from smart_ai_cli.client import GatewayClient, GatewayClientError
 from smart_ai_cli.config import default_config_manager
 from smart_ai_cli.ui import (
@@ -85,9 +87,16 @@ def chat_cmd(
                 f"{CHAT_INDENT}  /exit, /quit      - Exit chat session\n"
                 f"{CHAT_INDENT}  /reset, /clear    - Clear conversation history\n"
                 f"{CHAT_INDENT}  /policy <name>    - Change policy (adaptive, always_cheap, always_strong)\n"
+                f"{CHAT_INDENT}  /do <task>        - Run autonomous task (create/edit files, run commands)\n"
                 f"{CHAT_INDENT}  /help             - Display this help message"
             )
             continue
+        elif user_input.startswith("/do ") or user_input.startswith("/task "):
+            task_text = user_input.split(" ", 1)[1].strip()
+            if task_text:
+                runner = AutonomousAgentRunner()
+                runner.execute_task(task_text, policy=active_policy, temperature=active_temp)
+                continue
 
         conversation.append({"role": "user", "content": user_input})
 
@@ -214,11 +223,33 @@ def ask_cmd(
     temperature: Optional[float] = typer.Option(None, "--temperature", "-t", help="Sampling temperature"),
     stream: bool = typer.Option(True, "--stream/--no-stream", help="Stream response tokens"),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output raw JSON completion response"),
+    agent_mode: bool = typer.Option(
+        False, "--do", "--agent", "-a", help="Execute as an autonomous task (creates/edits files on disk)"
+    ),
 ) -> None:
-    """Executes a single one-shot query with intelligent auto-routing."""
+    """Executes a single one-shot query or autonomous task with intelligent auto-routing."""
     cfg = default_config_manager.load_config()
     active_policy = policy or cfg.default_policy
     active_temp = temperature if temperature is not None else cfg.default_temperature
+
+    # Check if this is an autonomous file/task operation
+    is_action_prompt = bool(
+        re.match(
+            r"^(create|make|write|edit|update|modify|read|list)\s+(the\s+)?(file|folder|directory|script)\b",
+            prompt.strip(),
+            re.IGNORECASE,
+        )
+    )
+    if agent_mode or is_action_prompt:
+        runner = AutonomousAgentRunner()
+        res = runner.execute_task(
+            task_prompt=prompt,
+            policy=active_policy,
+            temperature=active_temp,
+        )
+        if not res.success:
+            raise typer.Exit(code=1)
+        return
 
     client = GatewayClient()
     messages = [{"role": "user", "content": prompt}]

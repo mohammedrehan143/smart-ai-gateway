@@ -13,6 +13,7 @@ from smart_ai_cli.commands.login import login_cmd, logout_cmd
 from smart_ai_cli.commands.models import models_cmd
 from smart_ai_cli.commands.route import route_cmd
 from smart_ai_cli.commands.status import status_cmd
+from smart_ai_cli.commands.task import do_cmd, task_cmd
 from smart_ai_cli.commands.usage import usage_cmd
 from smart_ai_cli.ui import console
 
@@ -56,6 +57,8 @@ app.command(name="usage")(usage_cmd)
 app.command(name="cost")(cost_cmd)
 app.command(name="route")(route_cmd)
 app.command(name="benchmark")(benchmark_cmd)
+app.command(name="do")(do_cmd)
+app.command(name="task")(task_cmd)
 app.add_typer(config_app, name="config")
 
 

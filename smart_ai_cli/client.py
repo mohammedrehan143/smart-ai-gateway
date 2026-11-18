@@ -246,14 +246,15 @@ class GatewayClient:
 
     def chat(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[Dict[str, Any]],
         policy: str = "adaptive",
         temperature: float = 0.2,
         max_output_tokens: int = 1024,
+        tools: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Executes a standard non-streaming chat completion."""
         url = f"{self.base_url}/v1/chat"
-        payload = {
+        payload: Dict[str, Any] = {
             "messages": messages,
             "routing": {"policy": policy},
             "parameters": {
@@ -262,6 +263,8 @@ class GatewayClient:
             },
             "stream": False,
         }
+        if tools:
+            payload["tools"] = tools
 
         try:
             with httpx.Client(timeout=self.timeout) as client:
