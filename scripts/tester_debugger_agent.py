@@ -117,7 +117,9 @@ class TesterDebuggerAgent:
             return True
         return False
 
-    def step_git_deploy(self, commit_msg: str = "feat: Render deployable release with complete test suite and orchestrator") -> bool:
+    def step_git_deploy(
+        self, commit_msg: str = "feat: Render deployable release with complete test suite and orchestrator"
+    ) -> bool:
         self.log("DEPLOYER", "Initiating Git deployment step...")
 
         # 1. Check git remote
@@ -206,7 +208,12 @@ class TesterDebuggerAgent:
 def main():
     parser = argparse.ArgumentParser(description="Tester Debugger & Deployment Agent")
     parser.add_argument("--no-push", action="store_true", help="Run tests and validation without pushing to git")
-    parser.add_argument("-m", "--message", default="feat: Render deployable release with complete test suite and orchestrator", help="Commit message")
+    parser.add_argument(
+        "-m",
+        "--message",
+        default="feat: Render deployable release with complete test suite and orchestrator",
+        help="Commit message",
+    )
     args = parser.parse_args()
 
     agent = TesterDebuggerAgent()
