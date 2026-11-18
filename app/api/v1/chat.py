@@ -43,11 +43,12 @@ async def create_chat_completion(
 
         async def event_generator():
             completion = await orchestrator.execute_chat(request, client_request_id=x_request_id)
-            content = completion.choices[0].message.content if completion.choices else ""
-            words = content.split(" ")
-            for idx, word in enumerate(words):
-                chunk_piece = word if idx == len(words) - 1 else word + " "
-                chunk_data = {
+            choice = completion.choices[0] if completion.choices else None
+            content = choice.message.content if choice and choice.message.content else ""
+            tool_calls = choice.message.tool_calls if choice and choice.message.tool_calls else None
+
+            if tool_calls:
+                tc_chunk = {
                     "id": completion.id,
                     "object": "chat.completion.chunk",
                     "created": completion.created,
@@ -55,13 +56,32 @@ async def create_chat_completion(
                     "choices": [
                         {
                             "index": 0,
-                            "delta": {"content": chunk_piece},
-                            "finish_reason": None,
+                            "delta": {"content": content, "tool_calls": tool_calls},
+                            "finish_reason": "tool_calls",
                         }
                     ],
+                    "tool_calls": tool_calls,
                 }
-                yield f"data: {json.dumps(chunk_data)}\n\n"
-                await asyncio.sleep(0.015)
+                yield f"data: {json.dumps(tc_chunk)}\n\n"
+            elif content:
+                words = content.split(" ")
+                for idx, word in enumerate(words):
+                    chunk_piece = word if idx == len(words) - 1 else word + " "
+                    chunk_data = {
+                        "id": completion.id,
+                        "object": "chat.completion.chunk",
+                        "created": completion.created,
+                        "model": completion.model,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {"content": chunk_piece},
+                                "finish_reason": None,
+                            }
+                        ],
+                    }
+                    yield f"data: {json.dumps(chunk_data)}\n\n"
+                    await asyncio.sleep(0.015)
 
             final_data = {
                 "id": completion.id,
@@ -71,8 +91,8 @@ async def create_chat_completion(
                 "choices": [
                     {
                         "index": 0,
-                        "delta": {},
-                        "finish_reason": completion.choices[0].finish_reason if completion.choices else "stop",
+                        "delta": {"tool_calls": tool_calls} if tool_calls else {},
+                        "finish_reason": "tool_calls" if tool_calls else (choice.finish_reason if choice else "stop"),
                     }
                 ],
                 "usage": completion.usage.model_dump(),
@@ -82,6 +102,8 @@ async def create_chat_completion(
                 "cached": completion.cached,
                 "provider": completion.provider,
             }
+            if tool_calls:
+                final_data["tool_calls"] = tool_calls
             yield f"data: {json.dumps(final_data)}\n\n"
             yield "data: [DONE]\n\n"
 

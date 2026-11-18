@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -12,7 +13,7 @@ from rich.table import Table
 
 from smart_ai_cli.client import AuthenticationError, GatewayClient, GatewayClientError
 from smart_ai_cli.tools import AGENT_SYSTEM_PROMPT, TOOL_DEFINITIONS, execute_tool
-from smart_ai_cli.ui import console, print_error, print_success
+from smart_ai_cli.ui import console, print_chat_metadata, print_error, print_success
 
 
 @dataclass
@@ -254,7 +255,7 @@ class AutonomousAgentRunner:
                 )
                 console.print(f"  [bold yellow]⚙ Action:[/] [cyan]{name}[/]({args_preview})")
 
-                success, tool_res = execute_tool(name, args)
+                success, tool_res = execute_tool(name, args, cwd=work_dir)
 
                 if success:
                     console.print(f"  [bold green]✔[/] {tool_res}")
@@ -329,3 +330,294 @@ class AutonomousAgentRunner:
         console.print(table)
         print_success("Agent finished task successfully!")
         return result
+
+    def execute_interactive_turn(
+        self,
+        user_input: str,
+        conversation: List[Dict[str, Any]],
+        policy: str = "adaptive",
+        temperature: float = 0.2,
+        cwd: Optional[Path | str] = None,
+        use_stream: bool = True,
+        indent: int = 4,
+    ) -> None:
+        """Executes one turn of interactive chat with tool calling, multi-step execution, and verification."""
+        indent_str = " " * indent
+        work_dir = Path(cwd or ".").resolve()
+
+        # 1. Ensure system prompt with workspace context is present
+        if not conversation or conversation[0].get("role") != "system":
+            system_msg = (
+                f"{AGENT_SYSTEM_PROMPT}\n\nWorkspace Directory: {work_dir}\n"
+                "All relative file paths resolve against this workspace directory."
+            )
+            conversation.insert(0, {"role": "system", "content": system_msg})
+
+        # Sanitize conversation to avoid empty text turns
+        conversation[:] = [
+            m
+            for m in conversation
+            if (m.get("content") or "").strip() or m.get("tool_calls") or m.get("role") == "tool"
+        ]
+
+        conversation.append({"role": "user", "content": user_input})
+
+        step = 0
+        while step < self.max_steps:
+            step += 1
+            full_reply = ""
+            meta_chunk: Optional[Dict[str, Any]] = None
+            streamed_tool_calls: List[Dict[str, Any]] = []
+
+            try:
+                if use_stream:
+                    with console.status(f"{indent_str}[dim cyan]Thinking...[/dim cyan]", spinner="dots") as status:
+                        try:
+                            stream_iter = self.client.stream_chat(
+                                conversation,
+                                policy=policy,
+                                temperature=temperature,
+                                tools=TOOL_DEFINITIONS,
+                            )
+                        except TypeError:
+                            stream_iter = self.client.stream_chat(
+                                conversation,
+                                policy=policy,
+                                temperature=temperature,
+                            )
+                        first_chunk = None
+                        for chunk in stream_iter:
+                            first_chunk = chunk
+                            break
+                        status.stop()
+
+                    def write_stream_content(content: str) -> None:
+                        for char in content:
+                            if char == "\n":
+                                sys.stdout.write(f"\n{indent_str}")
+                            else:
+                                sys.stdout.write(char)
+                        sys.stdout.flush()
+
+                    console.print()
+                    sys.stdout.write(indent_str)
+
+                    if first_chunk:
+                        choices = first_chunk.get("choices", [])
+                        if choices:
+                            delta = choices[0].get("delta", {})
+                            delta_content = delta.get("content")
+                            delta_tc = delta.get("tool_calls")
+                            if delta_content:
+                                write_stream_content(delta_content)
+                                full_reply += delta_content
+                            if delta_tc:
+                                streamed_tool_calls.extend(delta_tc)
+                        if "usage" in first_chunk or "routing" in first_chunk:
+                            meta_chunk = first_chunk
+                        if "tool_calls" in first_chunk:
+                            streamed_tool_calls.extend(first_chunk["tool_calls"])
+
+                    for chunk in stream_iter:
+                        choices = chunk.get("choices", [])
+                        if choices:
+                            delta = choices[0].get("delta", {})
+                            delta_content = delta.get("content")
+                            delta_tc = delta.get("tool_calls")
+                            if delta_content:
+                                write_stream_content(delta_content)
+                                full_reply += delta_content
+                            if delta_tc:
+                                streamed_tool_calls.extend(delta_tc)
+                        if "usage" in chunk or "routing" in chunk:
+                            meta_chunk = chunk
+                        if "tool_calls" in chunk:
+                            streamed_tool_calls.extend(chunk["tool_calls"])
+
+                    sys.stdout.write("\n\n")
+                    sys.stdout.flush()
+
+                else:
+                    with console.status(f"{indent_str}[dim cyan]Thinking...[/dim cyan]", spinner="dots"):
+                        try:
+                            resp = self.client.chat(
+                                conversation,
+                                policy=policy,
+                                temperature=temperature,
+                                tools=TOOL_DEFINITIONS,
+                            )
+                        except TypeError:
+                            resp = self.client.chat(
+                                conversation,
+                                policy=policy,
+                                temperature=temperature,
+                            )
+
+                    choices = resp.get("choices", [])
+                    choice_msg = choices[0].get("message", {}) if choices else {}
+                    full_reply = choice_msg.get("content") or ""
+                    streamed_tool_calls = choice_msg.get("tool_calls") or []
+                    meta_chunk = resp
+
+                    if full_reply.strip() and not streamed_tool_calls:
+                        console.print()
+                        indented_lines = "\n".join(f"{indent_str}{line}" for line in full_reply.splitlines())
+                        console.print(indented_lines)
+                        console.print()
+
+            except Exception as exc:
+                if conversation and conversation[-1].get("role") == "user":
+                    conversation.pop()
+                raise exc
+
+            # Parse tool actions
+            actions_to_run: List[Dict[str, Any]] = []
+            if streamed_tool_calls:
+                for tc in streamed_tool_calls:
+                    fn = tc.get("function", {})
+                    fn_name = fn.get("name", "")
+                    raw_args = fn.get("arguments", "{}")
+                    if isinstance(raw_args, str):
+                        try:
+                            parsed_args = json.loads(raw_args)
+                        except Exception:
+                            parsed_args = {}
+                    else:
+                        parsed_args = raw_args or {}
+                    actions_to_run.append(
+                        {
+                            "id": tc.get("id"),
+                            "name": fn_name,
+                            "args": parsed_args,
+                            "native": True,
+                        }
+                    )
+            else:
+                block_actions = extract_action_blocks(full_reply)
+                for ba in block_actions:
+                    actions_to_run.append(
+                        {
+                            "id": None,
+                            "name": ba["name"],
+                            "args": ba["args"],
+                            "native": False,
+                            "raw": ba["raw"],
+                        }
+                    )
+
+            # Check if finished or need nudging
+            if not actions_to_run:
+                is_create_intent = bool(
+                    re.search(
+                        r"\b(create|make|write|touch)\b.*\b(file|script|folder)\b",
+                        user_input,
+                        re.IGNORECASE,
+                    )
+                )
+                if step == 1 and is_create_intent:
+                    console.print(
+                        f"{indent_str}[dim]Model provided text description. Requesting file write action...[/dim]"
+                    )
+                    conversation.append({"role": "assistant", "content": full_reply})
+                    conversation.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                "You described the file in conversational text, but did not execute a tool call or output an action code block. "
+                                "To create the file on disk, you MUST call the write_file tool or output:\n"
+                                "```action:write_file\n"
+                                '{"path": "<filename>", "content": "<exact file content>"}\n'
+                                "```\n"
+                                "Please create the file on disk now."
+                            ),
+                        }
+                    )
+                    continue
+
+                if full_reply and full_reply.strip():
+                    conversation.append({"role": "assistant", "content": full_reply})
+                else:
+                    if conversation and conversation[-1].get("role") == "user":
+                        conversation.pop()
+
+                if meta_chunk:
+                    routing = meta_chunk.get("routing", {})
+                    usage = meta_chunk.get("usage", {})
+                    print_chat_metadata(
+                        prompt=user_input,
+                        model=meta_chunk.get("model", "unknown"),
+                        tier=routing.get("tier", "unknown"),
+                        policy=routing.get("policy", policy),
+                        latency_ms=meta_chunk.get("latency_ms", 0),
+                        tokens=usage.get("total_tokens", 0),
+                        cost=usage.get("cost_estimate"),
+                        cached=meta_chunk.get("cached", False),
+                        trace_id=meta_chunk.get("trace_id"),
+                        classification_level=routing.get("classification_level"),
+                        reason=routing.get("reason"),
+                        agent=routing.get("agent"),
+                        provider=meta_chunk.get("provider") or routing.get("selected_provider"),
+                        mock_mode=routing.get("mock_mode"),
+                        input_tokens=usage.get("input_tokens"),
+                        output_tokens=usage.get("output_tokens"),
+                        indent=indent,
+                    )
+                break
+
+            # Execute actions with verification
+            tool_outputs: List[Dict[str, Any]] = []
+            for act in actions_to_run:
+                name = act["name"]
+                args = act["args"]
+
+                args_preview = ", ".join(
+                    f"{k}='{v}'" if not isinstance(v, str) or len(v) < 35 else f"{k}='{v[:32]}...'"
+                    for k, v in args.items()
+                )
+                console.print(f"{indent_str}[bold yellow]⚙ Action:[/] [cyan]{name}[/]({args_preview})")
+
+                success, tool_res = execute_tool(name, args, cwd=work_dir)
+
+                if success:
+                    console.print(f"{indent_str}[bold green]✔[/] {tool_res}")
+                else:
+                    console.print(f"{indent_str}[bold red]✖[/] {tool_res}")
+
+                tool_outputs.append(
+                    {
+                        "call_id": act.get("id"),
+                        "name": name,
+                        "success": success,
+                        "output": tool_res,
+                        "native": act.get("native", False),
+                    }
+                )
+
+            # Feed tool outputs back into conversation history
+            if streamed_tool_calls:
+                conversation.append(
+                    {
+                        "role": "assistant",
+                        "content": full_reply,
+                        "tool_calls": streamed_tool_calls,
+                    }
+                )
+                for out in tool_outputs:
+                    conversation.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": out["call_id"] or "call_unknown",
+                            "name": out["name"],
+                            "content": out["output"],
+                        }
+                    )
+            else:
+                conversation.append({"role": "assistant", "content": full_reply})
+                feedback_lines = [f"Result of {out['name']}:\n{out['output']}" for out in tool_outputs]
+                feedback_prompt = "\n\n".join(feedback_lines)
+                feedback_prompt += (
+                    "\n\nIf the task is now complete, provide your final response and summary without outputting further action blocks. "
+                    "Otherwise, output the next action block."
+                )
+                conversation.append({"role": "user", "content": feedback_prompt})
+

@@ -175,22 +175,26 @@ RULES:
 """
 
 
-def write_file(path: str, content: str) -> Tuple[bool, str]:
-    """Creates or overwrites a file with content."""
+def write_file(path: str, content: str, cwd: Optional[Path | str] = None) -> Tuple[bool, str]:
+    """Creates or overwrites a file with content, verifying the write on disk."""
     try:
-        resolved = Path(path).resolve()
+        base = Path(cwd).resolve() if cwd else Path.cwd().resolve()
+        resolved = (base / path).resolve()
         resolved.parent.mkdir(parents=True, exist_ok=True)
         resolved.write_text(content, encoding="utf-8")
+        if not resolved.exists():
+            return False, f"Verification failed: file '{path}' was not found on disk after write."
         size = resolved.stat().st_size
         return True, f"Successfully created {path} ({size} bytes)"
     except Exception as exc:
         return False, f"Failed to write file '{path}': {exc}"
 
 
-def edit_file(path: str, target: str, replacement: str) -> Tuple[bool, str]:
-    """Replaces target string in an existing file with replacement string."""
+def edit_file(path: str, target: str, replacement: str, cwd: Optional[Path | str] = None) -> Tuple[bool, str]:
+    """Replaces target string in an existing file with replacement string and verifies the edit."""
     try:
-        resolved = Path(path).resolve()
+        base = Path(cwd).resolve() if cwd else Path.cwd().resolve()
+        resolved = (base / path).resolve()
         if not resolved.is_file():
             return False, f"File not found: '{path}'"
 
@@ -200,15 +204,29 @@ def edit_file(path: str, target: str, replacement: str) -> Tuple[bool, str]:
 
         updated = text.replace(target, replacement, 1)
         resolved.write_text(updated, encoding="utf-8")
+
+        # Verify modification
+        new_text = resolved.read_text(encoding="utf-8")
+        if target in new_text and target != replacement:
+            return False, f"Verification failed: Target text still found in '{path}' after edit."
+        if replacement not in new_text:
+            return False, f"Verification failed: Replacement text not found in '{path}' after edit."
+
         return True, f"Successfully updated '{path}'."
     except Exception as exc:
         return False, f"Failed to edit file '{path}': {exc}"
 
 
-def read_file(path: str, start_line: Optional[int] = None, end_line: Optional[int] = None) -> Tuple[bool, str]:
+def read_file(
+    path: str,
+    start_line: Optional[int] = None,
+    end_line: Optional[int] = None,
+    cwd: Optional[Path | str] = None,
+) -> Tuple[bool, str]:
     """Reads file contents, optionally slicing by line numbers (1-indexed)."""
     try:
-        resolved = Path(path).resolve()
+        base = Path(cwd).resolve() if cwd else Path.cwd().resolve()
+        resolved = (base / path).resolve()
         if not resolved.is_file():
             return False, f"File not found: '{path}'"
 
@@ -226,10 +244,15 @@ def read_file(path: str, start_line: Optional[int] = None, end_line: Optional[in
         return False, f"Failed to read file '{path}': {exc}"
 
 
-def list_directory(path: Optional[str] = None, recursive: bool = False) -> Tuple[bool, str]:
+def list_directory(
+    path: Optional[str] = None,
+    recursive: bool = False,
+    cwd: Optional[Path | str] = None,
+) -> Tuple[bool, str]:
     """Lists files and directories in path."""
     try:
-        target = Path(path or ".").resolve()
+        base = Path(cwd).resolve() if cwd else Path.cwd().resolve()
+        target = (base / path).resolve() if path else base
         if not target.exists():
             return False, f"Directory not found: '{path}'"
 
@@ -258,15 +281,17 @@ def list_directory(path: Optional[str] = None, recursive: bool = False) -> Tuple
         return False, f"Failed to list directory '{path}': {exc}"
 
 
-def run_command(command: str, timeout_seconds: int = 30) -> Tuple[bool, str]:
-    """Executes a shell command."""
+def run_command(command: str, timeout_seconds: int = 30, cwd: Optional[Path | str] = None) -> Tuple[bool, str]:
+    """Executes a shell command in the specified working directory."""
     try:
+        work_dir = Path(cwd).resolve() if cwd else Path.cwd().resolve()
         proc = subprocess.run(
             command,
             shell=True,
             capture_output=True,
             text=True,
             timeout=timeout_seconds,
+            cwd=str(work_dir),
         )
         out = (proc.stdout or "").strip()
         err = (proc.stderr or "").strip()
@@ -283,32 +308,36 @@ def run_command(command: str, timeout_seconds: int = 30) -> Tuple[bool, str]:
         return False, f"Command execution error: {exc}"
 
 
-def execute_tool(name: str, args: Dict[str, Any]) -> Tuple[bool, str]:
+def execute_tool(name: str, args: Dict[str, Any], cwd: Optional[Path | str] = None) -> Tuple[bool, str]:
     """Dispatches a tool call to the corresponding local execution function."""
     clean_name = name.lower().strip()
     if clean_name == "write_file":
-        return write_file(path=args.get("path", ""), content=args.get("content", ""))
+        return write_file(path=args.get("path", ""), content=args.get("content", ""), cwd=cwd)
     elif clean_name == "edit_file":
         return edit_file(
             path=args.get("path", ""),
             target=args.get("target", ""),
             replacement=args.get("replacement", ""),
+            cwd=cwd,
         )
     elif clean_name == "read_file":
         return read_file(
             path=args.get("path", ""),
             start_line=args.get("start_line"),
             end_line=args.get("end_line"),
+            cwd=cwd,
         )
     elif clean_name == "list_directory":
         return list_directory(
             path=args.get("path"),
             recursive=bool(args.get("recursive", False)),
+            cwd=cwd,
         )
     elif clean_name == "run_command":
         return run_command(
             command=args.get("command", ""),
             timeout_seconds=int(args.get("timeout_seconds", 30)),
+            cwd=cwd,
         )
     else:
         return False, f"Unknown tool: '{name}'"

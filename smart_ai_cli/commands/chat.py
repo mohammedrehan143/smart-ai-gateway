@@ -76,6 +76,8 @@ def chat_cmd(
 
     conversation: List[Dict[str, str]] = []
 
+    agent_runner = AutonomousAgentRunner(client=client)
+
     while True:
         try:
             user_input = ChatPrompt.ask(f"\n{CHAT_INDENT}[bold cyan]❯[/bold cyan]").strip()
@@ -125,138 +127,20 @@ def chat_cmd(
                 f"{CHAT_INDENT}  /help             - Display this help message"
             )
             continue
-        is_action_prompt = bool(ACTION_PROMPT_REGEX.match(user_input.strip()))
-        if user_input.startswith("/do ") or user_input.startswith("/task ") or is_action_prompt:
-            task_text = user_input
-            if user_input.startswith("/do ") or user_input.startswith("/task "):
-                task_text = user_input.split(" ", 1)[1].strip()
-            if task_text:
-                runner = AutonomousAgentRunner()
-                runner.execute_task(task_text, policy=active_policy, temperature=active_temp)
-                continue
 
-        # Sanitize existing history to prevent corrupted or empty turns from lingering
-        conversation[:] = [
-            m for m in conversation
-            if (m.get("content") or "").strip() or m.get("tool_calls")
-        ]
-
-        conversation.append({"role": "user", "content": user_input})
+        effective_prompt = user_input
+        if user_input.startswith("/do ") or user_input.startswith("/task "):
+            effective_prompt = user_input.split(" ", 1)[1].strip()
 
         try:
-            if use_stream:
-                full_reply = ""
-                meta_chunk: Optional[Dict] = None
-
-                with console.status(f"{CHAT_INDENT}[dim cyan]Thinking...[/dim cyan]", spinner="dots") as status:
-                    stream_iter = client.stream_chat(conversation, policy=active_policy, temperature=active_temp)
-                    first_chunk = None
-                    for chunk in stream_iter:
-                        first_chunk = chunk
-                        break
-                    status.stop()
-
-                def write_stream_content(content: str) -> None:
-                    for char in content:
-                        if char == "\n":
-                            sys.stdout.write(f"\n{CHAT_INDENT}")
-                        else:
-                            sys.stdout.write(char)
-                    sys.stdout.flush()
-
-                console.print()
-                sys.stdout.write(CHAT_INDENT)
-
-                if first_chunk:
-                    choices = first_chunk.get("choices", [])
-                    if choices:
-                        delta = choices[0].get("delta", {})
-                        delta_content = delta.get("content")
-                        if delta_content:
-                            write_stream_content(delta_content)
-                            full_reply += delta_content
-                    if "usage" in first_chunk or "routing" in first_chunk:
-                        meta_chunk = first_chunk
-
-                for chunk in stream_iter:
-                    choices = chunk.get("choices", [])
-                    if choices:
-                        delta = choices[0].get("delta", {})
-                        delta_content = delta.get("content")
-                        if delta_content:
-                            write_stream_content(delta_content)
-                            full_reply += delta_content
-                    if "usage" in chunk or "routing" in chunk:
-                        meta_chunk = chunk
-
-                sys.stdout.write("\n\n")
-                sys.stdout.flush()
-
-                if full_reply and full_reply.strip():
-                    conversation.append({"role": "assistant", "content": full_reply})
-                else:
-                    if conversation and conversation[-1].get("role") == "user":
-                        conversation.pop()
-
-                if meta_chunk:
-                    routing = meta_chunk.get("routing", {})
-                    usage = meta_chunk.get("usage", {})
-                    print_chat_metadata(
-                        prompt=user_input,
-                        model=meta_chunk.get("model", "unknown"),
-                        tier=routing.get("tier", "unknown"),
-                        policy=routing.get("policy", active_policy),
-                        latency_ms=meta_chunk.get("latency_ms", 0),
-                        tokens=usage.get("total_tokens", 0),
-                        cost=usage.get("cost_estimate"),
-                        cached=meta_chunk.get("cached", False),
-                        trace_id=meta_chunk.get("trace_id"),
-                        classification_level=routing.get("classification_level"),
-                        reason=routing.get("reason"),
-                        agent=routing.get("agent"),
-                        provider=meta_chunk.get("provider") or routing.get("selected_provider"),
-                        mock_mode=routing.get("mock_mode"),
-                        input_tokens=usage.get("input_tokens"),
-                        output_tokens=usage.get("output_tokens"),
-                        indent=4,
-                    )
-            else:
-                with console.status(f"{CHAT_INDENT}[dim cyan]Thinking...[/dim cyan]", spinner="dots"):
-                    resp = client.chat(conversation, policy=active_policy, temperature=active_temp)
-
-                console.print()
-                reply_text = resp["choices"][0]["message"]["content"] or ""
-                indented_lines = "\n".join(f"{CHAT_INDENT}{line}" for line in reply_text.splitlines())
-                console.print(indented_lines)
-                console.print()
-                if reply_text and reply_text.strip():
-                    conversation.append({"role": "assistant", "content": reply_text})
-                else:
-                    if conversation and conversation[-1].get("role") == "user":
-                        conversation.pop()
-
-                routing = resp.get("routing", {})
-                usage = resp.get("usage", {})
-                print_chat_metadata(
-                    prompt=user_input,
-                    model=resp.get("model", "unknown"),
-                    tier=routing.get("tier", "unknown"),
-                    policy=routing.get("policy", active_policy),
-                    latency_ms=resp.get("latency_ms", 0),
-                    tokens=usage.get("total_tokens", 0),
-                    cost=usage.get("cost_estimate"),
-                    cached=resp.get("cached", False),
-                    trace_id=resp.get("trace_id"),
-                    classification_level=routing.get("classification_level"),
-                    reason=routing.get("reason"),
-                    agent=routing.get("agent"),
-                    provider=resp.get("provider") or routing.get("selected_provider"),
-                    mock_mode=routing.get("mock_mode"),
-                    input_tokens=usage.get("input_tokens"),
-                    output_tokens=usage.get("output_tokens"),
-                    indent=4,
-                )
-
+            agent_runner.execute_interactive_turn(
+                user_input=effective_prompt,
+                conversation=conversation,
+                policy=active_policy,
+                temperature=active_temp,
+                use_stream=use_stream,
+                indent=4,
+            )
         except AuthenticationError as exc:
             if conversation and conversation[-1].get("role") == "user":
                 conversation.pop()

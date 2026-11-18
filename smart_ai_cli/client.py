@@ -299,14 +299,15 @@ class GatewayClient:
 
     def stream_chat(
         self,
-        messages: List[Dict[str, str]],
+        messages: List[Dict[str, Any]],
         policy: str = "adaptive",
         temperature: float = 0.2,
         max_output_tokens: int = 1024,
+        tools: Optional[List[Dict[str, Any]]] = None,
     ) -> Generator[Dict[str, Any], None, None]:
         """Streams chat completion tokens and metadata chunks over Server-Sent Events."""
         url = f"{self.base_url}/v1/chat"
-        payload = {
+        payload: Dict[str, Any] = {
             "messages": self._sanitize_messages(messages),
             "routing": {"policy": policy},
             "parameters": {
@@ -315,6 +316,8 @@ class GatewayClient:
             },
             "stream": True,
         }
+        if tools:
+            payload["tools"] = tools
 
         try:
             with httpx.Client(timeout=self.timeout) as client:
