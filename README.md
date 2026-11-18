@@ -4,7 +4,7 @@
 
 [![CI Pipeline](https://github.com/gateai/smart-ai-gateway/actions/workflows/ci.yml/badge.svg)](https://github.com/gateai/smart-ai-gateway/actions/workflows/ci.yml)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/)
-[![Test Suite](https://img.shields.io/badge/tests-151%20passed-brightgreen.svg)](tests/)
+[![Test Suite](https://img.shields.io/badge/tests-177%20passed-brightgreen.svg)](tests/)
 [![Routing Accuracy](https://img.shields.io/badge/routing%20accuracy-100%25-success.svg)](evaluation_dataset/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -188,31 +188,138 @@ curl -X DELETE http://localhost:8000/v1/credentials/groq \
 
 ---
 
-## 7. Smart AI CLI Guide (`smartai`)
+## 7. Smart AI Gateway – Setup & CLI Guide for Another Device
 
-```bash
-# Login and store gateway credentials in OS Keyring
-smartai login
+### 7.1. Prerequisites
 
-# Check gateway health and latency
-smartai status
+Install:
+- Python 3.10 or newer (tested on Python 3.11–3.14).
+- Git for Windows / Linux / macOS.
+- Terminal (Windows PowerShell, bash, or zsh).
 
-# Interactive multi-turn chat with live streaming
-smartai chat
+Verify installations:
 
-# One-shot intelligent prompt execution
-smartai ask "Design a high-throughput microservices architecture"
-
-# Inspect recent routing decisions & feature extractions
-smartai route --limit 10
-
-# Inspect usage & spend telemetry
-smartai usage --hours 24
-smartai cost --hours 48
-
-# Run automated benchmark evaluation
-smartai benchmark --samples 21 --export docs/BENCHMARK_REPORT.md
+```powershell
+python --version
+git --version
 ```
+
+### 7.2. Install Smart AI Gateway
+
+Open PowerShell or terminal and run:
+
+```powershell
+python -m pip install git+https://github.com/mohammedrehan143/smart-ai-gateway.git
+```
+
+Verify installation:
+
+```powershell
+python -m pip show smart-ai-gateway
+```
+
+### 7.3. Verify the CLI
+
+Check whether the package is installed:
+
+```powershell
+python -m pip show -f smart-ai-gateway
+```
+
+The package includes:
+- `smart_ai_cli`
+- `smart_ai_cli\__main__.py`
+- `smartai.exe`
+
+**Important:** On systems where Windows Application Control, corporate policies, or PATH restrictions block `pip.exe` or `smartai.exe`, use the Python module launcher (`python -m smart_ai_cli`) instead.
+
+### 7.4. Launch Smart AI CLI
+
+Display available commands:
+
+```powershell
+python -m smart_ai_cli --help
+```
+
+Start interactive chat:
+
+```powershell
+python -m smart_ai_cli chat
+```
+
+### 7.5. Login
+
+If authentication is required:
+
+```powershell
+python -m smart_ai_cli login
+```
+
+Follow the authentication instructions displayed in the terminal (or supply `--key <API_KEY>`).
+
+### 7.6. Check Gateway Status
+
+```powershell
+python -m smart_ai_cli status
+```
+
+### 7.7. Create Files Using AI
+
+Navigate to the folder where you want to create a file:
+
+```powershell
+cd "C:\Users\YourUsername\Desktop\TestFolder"
+```
+
+Check your current directory:
+
+```powershell
+Get-Location
+```
+
+Use the autonomous task command:
+
+```powershell
+python -m smart_ai_cli do "Create a hello.md file in the current directory with a Hello World heading and a short welcome message. Actually create the file, do not just provide its contents."
+```
+
+Verify file creation:
+
+```powershell
+Test-Path .\hello.md
+```
+
+### 7.8. Other Available Commands
+
+```powershell
+python -m smart_ai_cli models
+python -m smart_ai_cli usage
+python -m smart_ai_cli cost
+python -m smart_ai_cli route
+python -m smart_ai_cli benchmark
+python -m smart_ai_cli config
+```
+
+### 7.9. Important Notes
+
+1. Use `python -m smart_ai_cli` instead of `smartai` if Windows blocks the generated executable.
+2. Use `do` for autonomous file creation and editing.
+3. Use `chat` for interactive conversations and multi-turn agent assistance.
+4. Run commands from the directory where you want the files created.
+5. If Windows Application Control blocks execution, use an administrator-approved installation and execution method. Do not disable security policies.
+6. If the gateway uses a mock provider, configure a supported real provider before expecting real LLM responses or autonomous execution.
+
+### 7.10. Final Verification
+
+Run:
+
+```powershell
+python -m smart_ai_cli --version
+python -m smart_ai_cli --help
+python -m smart_ai_cli status
+```
+
+The setup is ready for testing once the CLI launches and the gateway reports its status.
 
 ---
 
@@ -221,7 +328,7 @@ smartai benchmark --samples 21 --export docs/BENCHMARK_REPORT.md
 The gateway includes comprehensive test coverage across unit, integration, security, routing regression, and reliability tests:
 
 ```bash
-# Run complete test suite (151 tests)
+# Run complete test suite (177 tests)
 pytest -v
 
 # Run security hardening tests
