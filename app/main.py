@@ -23,7 +23,7 @@ from app.api.v1.models import router as models_router
 from app.api.v1.routing import router as routing_router
 from app.core.config import settings
 from app.core.errors import GatewayError
-from app.core.rate_limiter import default_rate_limiter
+from app.core.rate_limiter import default_rate_limiter, extract_client_ip
 from app.core.logging import (
     configure_logging,
     correlation_request_id,
@@ -70,7 +70,7 @@ app.add_middleware(
 @app.middleware("http")
 async def security_and_limits_middleware(request: Request, call_next):
     # 0. Client Rate Limiting
-    client_ip = request.client.host if request.client else "127.0.0.1"
+    client_ip = extract_client_ip(request)
     is_allowed, retry_after = default_rate_limiter.check_rate_limit(client_ip)
     if not is_allowed:
         return JSONResponse(

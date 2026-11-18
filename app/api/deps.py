@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 from fastapi import Depends, Header, HTTPException, Request, status
 from app.core.config import settings
-from app.core.rate_limiter import default_rate_limiter
+from app.core.rate_limiter import default_rate_limiter, extract_client_ip
 from app.domain.interfaces import TraceRepository
 from app.providers.resolver import DynamicProviderAdapter
 from app.repositories.sqlite import SqliteTraceRepository
@@ -46,9 +46,7 @@ async def get_orchestrator() -> ChatOrchestrator:
 
 
 def _get_client_ip(request: Optional[Request]) -> str:
-    if request and request.client:
-        return request.client.host
-    return "127.0.0.1"
+    return extract_client_ip(request)
 
 
 async def get_authenticated_user(
@@ -58,26 +56,12 @@ async def get_authenticated_user(
 ) -> AuthenticatedUser:
     """Derives user identity from verified authentication token with constant-time validation.
 
-    Prevents unauthorized tenant impersonation and production bypasses.
+    Prevents unauthorized tenant impersonation and production bypasses while protecting
+    against brute-force attacks without locking out legitimate administrators.
     """
     client_ip = _get_client_ip(request)
 
-    # 1. Check brute-force lockout
-    is_locked, retry_after = default_rate_limiter.is_ip_locked_out(client_ip)
-    if is_locked:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            headers={"Retry-After": str(retry_after)},
-            detail={
-                "error": {
-                    "type": "rate_limited",
-                    "message": f"IP temporarily locked out due to repeated failed authentication attempts. Retry in {retry_after} seconds.",
-                    "retryable": False,
-                }
-            },
-        )
-
-    # 2. In dev/test mode with no GATEWAY_API_KEY set, permit local development
+    # 1. In dev/test mode with no GATEWAY_API_KEY set, permit local development
     if settings.is_dev_mode:
         resolved_user = x_user_id or "default_user"
         return AuthenticatedUser(
@@ -87,45 +71,91 @@ async def get_authenticated_user(
             token_identifier="dev_local",
         )
 
-    # 3. Production or key-configured mode: Authorization header (or cookie/query key) is required
-    if not authorization:
-        cookie_key = request.cookies.get("smartai_gateway_key")
-        query_key = request.query_params.get("api_key") or request.query_params.get("key")
-        token_candidate = cookie_key or query_key
-        if token_candidate and token_candidate.strip():
-            authorization = f"Bearer {token_candidate.strip()}"
-        else:
+    # 2. Extract token from Authorization header or cookie/query key
+    raw_token: Optional[str] = None
+    if authorization:
+        scheme, _, token = authorization.partition(" ")
+        if scheme.lower() == "bearer" and token.strip():
+            raw_token = token.strip()
+        elif scheme.lower() != "bearer":
+            # Invalid scheme (e.g. Basic)
+            is_locked, retry_after = default_rate_limiter.is_ip_locked_out(client_ip)
+            if is_locked:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    headers={"Retry-After": str(retry_after)},
+                    detail={
+                        "error": {
+                            "type": "rate_limited",
+                            "message": f"IP temporarily locked out due to repeated failed authentication attempts. Retry in {retry_after} seconds.",
+                            "retryable": False,
+                        }
+                    },
+                )
             default_rate_limiter.record_failed_auth(client_ip)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail={
                     "error": {
                         "type": "unauthorized",
-                        "message": "Missing Authorization header. Bearer token required.",
+                        "message": "Invalid authentication scheme. Expected 'Bearer <token>'.",
                         "retryable": False,
                     }
                 },
             )
 
-    scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or not token.strip():
+    if not raw_token:
+        cookie_key = request.cookies.get("smartai_gateway_key")
+        query_key = request.query_params.get("api_key") or request.query_params.get("key")
+        candidate = cookie_key or query_key
+        if candidate and candidate.strip():
+            raw_token = candidate.strip()
+
+    # If no token provided:
+    if not raw_token:
+        is_locked, retry_after = default_rate_limiter.is_ip_locked_out(client_ip)
+        if is_locked:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                headers={"Retry-After": str(retry_after)},
+                detail={
+                    "error": {
+                        "type": "rate_limited",
+                        "message": f"IP temporarily locked out due to repeated failed authentication attempts. Retry in {retry_after} seconds.",
+                        "retryable": False,
+                    }
+                },
+            )
         default_rate_limiter.record_failed_auth(client_ip)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail={
                 "error": {
                     "type": "unauthorized",
-                    "message": "Invalid authentication scheme. Expected 'Bearer <token>'.",
+                    "message": "Missing Authorization header. Bearer token required.",
                     "retryable": False,
                 }
             },
         )
 
-    cleaned_token = token.strip()
+    cleaned_token = raw_token
 
-    # 4. Check key revocation list
+    # 3. Check key revocation list
     for revoked_key in settings.REVOKED_API_KEYS:
         if revoked_key and secrets.compare_digest(cleaned_token, revoked_key.strip()):
+            is_locked, retry_after = default_rate_limiter.is_ip_locked_out(client_ip)
+            if is_locked:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    headers={"Retry-After": str(retry_after)},
+                    detail={
+                        "error": {
+                            "type": "rate_limited",
+                            "message": f"IP temporarily locked out due to repeated failed authentication attempts. Retry in {retry_after} seconds.",
+                            "retryable": False,
+                        }
+                    },
+                )
             default_rate_limiter.record_failed_auth(client_ip)
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -138,13 +168,47 @@ async def get_authenticated_user(
                 },
             )
 
-    # 5. Check against tenant-specific token registry
+    # 4. Check against master GATEWAY_API_KEY
+    is_master_match = False
+    if settings.GATEWAY_API_KEY and secrets.compare_digest(cleaned_token, settings.GATEWAY_API_KEY.strip()):
+        is_master_match = True
+
+    # 5. Check against ALLOWED_API_KEYS for key rotation
+    if not is_master_match:
+        for allowed_key in settings.ALLOWED_API_KEYS:
+            if allowed_key and secrets.compare_digest(cleaned_token, allowed_key.strip()):
+                is_master_match = True
+                break
+
+    if is_master_match:
+        default_rate_limiter.reset_failed_auth(client_ip)
+        effective_user = x_user_id or "default_user"
+        auth_user = AuthenticatedUser(
+            user_id=effective_user,
+            is_admin=True,
+            tenant_id=effective_user,
+            token_identifier="master_key",
+        )
+        is_allowed, retry_after = default_rate_limiter.check_tenant_rate_limit(auth_user.tenant_id)
+        if not is_allowed:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                headers={"Retry-After": str(retry_after)},
+                detail={
+                    "error": {
+                        "type": "rate_limited",
+                        "message": f"Tenant '{auth_user.tenant_id}' rate limit exceeded. Retry in {retry_after}s.",
+                        "retryable": True,
+                    }
+                },
+            )
+        return auth_user
+
+    # 6. Check against tenant-specific token registry
     tenant_mappings = settings.get_tenant_key_mappings()
     for reg_key, mapped_user in tenant_mappings.items():
         if secrets.compare_digest(cleaned_token, reg_key):
-            # Verified tenant token
             default_rate_limiter.reset_failed_auth(client_ip)
-            # If client provided an X-User-ID header that differs from mapped tenant, reject impersonation!
             if x_user_id and x_user_id != mapped_user:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
@@ -162,7 +226,6 @@ async def get_authenticated_user(
                 tenant_id=mapped_user,
                 token_identifier=f"tenant_{mapped_user}",
             )
-            # Check tenant rate limit
             is_allowed, retry_after = default_rate_limiter.check_tenant_rate_limit(auth_user.tenant_id)
             if not is_allowed:
                 raise HTTPException(
@@ -178,54 +241,33 @@ async def get_authenticated_user(
                 )
             return auth_user
 
-    # 6. Check against master GATEWAY_API_KEY
-    is_master_match = False
-    if settings.GATEWAY_API_KEY and secrets.compare_digest(cleaned_token, settings.GATEWAY_API_KEY.strip()):
-        is_master_match = True
-
-    # 7. Check against ALLOWED_API_KEYS for key rotation
-    if not is_master_match:
-        for allowed_key in settings.ALLOWED_API_KEYS:
-            if allowed_key and secrets.compare_digest(cleaned_token, allowed_key.strip()):
-                is_master_match = True
-                break
-
-    if not is_master_match:
-        default_rate_limiter.record_failed_auth(client_ip)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail={
-                "error": {
-                    "type": "unauthorized",
-                    "message": "Invalid Bearer token.",
-                    "retryable": False,
-                }
-            },
-        )
-
-    # Token is valid master/allowed admin key
-    default_rate_limiter.reset_failed_auth(client_ip)
-    effective_user = x_user_id or "default_user"
-    auth_user = AuthenticatedUser(
-        user_id=effective_user,
-        is_admin=True,
-        tenant_id=effective_user,
-        token_identifier="master_key",
-    )
-    is_allowed, retry_after = default_rate_limiter.check_tenant_rate_limit(auth_user.tenant_id)
-    if not is_allowed:
+    # 7. Token was provided but is invalid: check brute-force lockout
+    is_locked, retry_after = default_rate_limiter.is_ip_locked_out(client_ip)
+    if is_locked:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             headers={"Retry-After": str(retry_after)},
             detail={
                 "error": {
                     "type": "rate_limited",
-                    "message": f"Tenant '{auth_user.tenant_id}' rate limit exceeded. Retry in {retry_after}s.",
-                    "retryable": True,
+                    "message": f"IP temporarily locked out due to repeated failed authentication attempts. Retry in {retry_after} seconds.",
+                    "retryable": False,
                 }
             },
         )
-    return auth_user
+
+    # Record failed attempt and reject
+    default_rate_limiter.record_failed_auth(client_ip)
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail={
+            "error": {
+                "type": "unauthorized",
+                "message": "Invalid Bearer token.",
+                "retryable": False,
+            }
+        },
+    )
 
 
 async def verify_gateway_auth(

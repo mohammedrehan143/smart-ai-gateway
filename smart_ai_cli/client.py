@@ -87,6 +87,12 @@ class GatewayClient:
         if response.is_success:
             return
 
+        # Ensure streaming responses read their body before accessing json() or text
+        try:
+            response.read()
+        except Exception:
+            pass
+
         status = response.status_code
         err_msg = f"HTTP {status}"
         try:
@@ -100,7 +106,10 @@ class GatewayClient:
                 else:
                     err_msg = str(detail)
         except Exception:
-            err_msg = response.text or err_msg
+            try:
+                err_msg = response.text or err_msg
+            except Exception:
+                pass
 
         if status in (401, 403):
             raise AuthenticationError(f"Authentication failed: {err_msg}")

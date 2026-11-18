@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 from collections import defaultdict
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from app.core.config import settings
 
 
@@ -108,3 +108,29 @@ class InMemoryRateLimiter:
 
 
 default_rate_limiter = InMemoryRateLimiter()
+
+
+def extract_client_ip(request: Optional[Any]) -> str:
+    """Extracts true client IP, prioritizing reverse proxy headers (Cloudflare, Render, etc.)."""
+    if not request:
+        return "127.0.0.1"
+    headers = getattr(request, "headers", {})
+    # 1. Cloudflare connecting IP
+    cf_ip = headers.get("cf-connecting-ip")
+    if cf_ip and cf_ip.strip():
+        return cf_ip.strip()
+    # 2. X-Forwarded-For (client is the first IP in the chain)
+    forwarded = headers.get("x-forwarded-for")
+    if forwarded:
+        parts = [p.strip() for p in forwarded.split(",") if p.strip()]
+        if parts:
+            return parts[0]
+    # 3. X-Real-IP
+    real_ip = headers.get("x-real-ip")
+    if real_ip and real_ip.strip():
+        return real_ip.strip()
+    # 4. Fallback to direct client host
+    client = getattr(request, "client", None)
+    if client and getattr(client, "host", None):
+        return client.host
+    return "127.0.0.1"
