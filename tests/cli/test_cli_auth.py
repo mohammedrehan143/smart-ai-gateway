@@ -29,7 +29,11 @@ def test_auth_manager_storage(tmp_path: Path, monkeypatch):
     assert mgr.get_api_key() is None
 
 
-def test_cli_logout_command():
+def test_cli_logout_command(tmp_path, monkeypatch):
+    from smart_ai_cli.auth import default_auth_manager
+
+    monkeypatch.setattr(default_auth_manager, "fallback_file", tmp_path / "credentials.json")
+    monkeypatch.setattr(default_auth_manager, "delete_api_key", lambda: None)
     res = runner.invoke(app, ["logout"])
     assert res.exit_code == 0
 

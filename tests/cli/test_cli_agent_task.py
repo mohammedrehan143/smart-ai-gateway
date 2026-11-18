@@ -94,6 +94,28 @@ def test_extract_action_blocks():
     assert blocks[1]["name"] == "read_file"
 
 
+def test_extract_action_blocks_fallback():
+    # Model text mention with markdown code block
+    text = "The file **demo.py** has been created:\n```python\nprint('demo')\n```"
+    blocks = extract_action_blocks(text)
+    assert len(blocks) == 1
+    assert blocks[0]["name"] == "write_file"
+    assert blocks[0]["args"]["path"] == "demo.py"
+    assert "print('demo')" in blocks[0]["args"]["content"]
+
+
+def test_action_prompt_regex():
+    from smart_ai_cli.commands.chat import ACTION_PROMPT_REGEX
+
+    assert bool(ACTION_PROMPT_REGEX.match("create a file test.txt")) is True
+    assert bool(ACTION_PROMPT_REGEX.match("create file test.txt")) is True
+    assert bool(ACTION_PROMPT_REGEX.match("make a file app.py")) is True
+    assert bool(ACTION_PROMPT_REGEX.match("can you create a file index.html")) is True
+    assert bool(ACTION_PROMPT_REGEX.match("write a python script test.py")) is True
+    assert bool(ACTION_PROMPT_REGEX.match("hello how are you")) is False
+    assert bool(ACTION_PROMPT_REGEX.match("what is recursion")) is False
+
+
 def test_autonomous_agent_runner_with_native_tools(tmp_path):
     mock_client = MagicMock()
     # Step 1: Model requests tool call to write a file

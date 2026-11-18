@@ -31,7 +31,9 @@ class AgentTaskResult:
 def extract_action_blocks(content: str) -> List[Dict[str, Any]]:
     """Extracts fallback ```action:<tool_name>\n{...}``` codeblocks if model didn't use native tool_calls."""
     actions: List[Dict[str, Any]] = []
-    pattern = r"```action:([a-zA-Z0-9_-]+)\s*\n([\s\S]*?)```"
+
+    # 1. Standard ```action:<tool_name>\n{...}``` or ```tool:<tool_name>\n{...}```
+    pattern = r"```(?:action|tool):([a-zA-Z0-9_-]+)\s*\n([\s\S]*?)```"
     matches = re.finditer(pattern, content)
     for m in matches:
         tool_name = m.group(1).strip()
@@ -42,6 +44,47 @@ def extract_action_blocks(content: str) -> List[Dict[str, Any]]:
         except json.JSONDecodeError:
             # Try fixing common json flaws or key=val
             actions.append({"name": tool_name, "args": {"raw_payload": raw_json}, "raw": m.group(0)})
+
+    if actions:
+        return actions
+
+    # 2. Check for ```json\n{"action": "write_file", ...}``` or direct {"path": ..., "content": ...}
+    json_block_pattern = r"```(?:json)?\s*\n([\s\S]*?)```"
+    for m in re.finditer(json_block_pattern, content):
+        raw_json = m.group(1).strip()
+        try:
+            parsed = json.loads(raw_json)
+            if isinstance(parsed, dict):
+                if "action" in parsed and "args" in parsed:
+                    actions.append({"name": parsed["action"], "args": parsed["args"], "raw": m.group(0)})
+                elif "path" in parsed and "content" in parsed:
+                    actions.append({"name": "write_file", "args": parsed, "raw": m.group(0)})
+        except Exception:
+            pass
+
+    if actions:
+        return actions
+
+    # 3. Fallback heuristic: Model responded with filename mention and markdown code block
+    file_msg_match = re.search(
+        r"(?:file|created|written|named)\s+[\*`\'\"]*([a-zA-Z0-9_\-./\\]+\.[a-zA-Z0-9]+)[\*`\'\"]*",
+        content,
+        re.IGNORECASE,
+    )
+    code_block_match = re.search(r"```[a-zA-Z0-9_-]*\s*\n([\s\S]*?)```", content)
+    if file_msg_match and code_block_match:
+        extracted_path = file_msg_match.group(1).strip()
+        extracted_content = code_block_match.group(1)
+        actions.append(
+            {
+                "id": None,
+                "name": "write_file",
+                "args": {"path": extracted_path, "content": extracted_content},
+                "native": False,
+                "raw": code_block_match.group(0),
+            }
+        )
+
     return actions
 
 
@@ -158,11 +201,45 @@ class AutonomousAgentRunner:
                         }
                     )
 
-            # 2. If no actions were requested, agent has finished!
+            # 2. If no actions were requested, check if we need to nudge or if finished
             if not actions_to_run:
+                is_create_intent = bool(
+                    re.search(r"\b(create|make|write|touch)\b.*\b(file|script|folder)\b", task_prompt, re.IGNORECASE)
+                )
+                if step == 1 and is_create_intent:
+                    console.print("[dim]Model provided text. Requesting file write action block...[/dim]")
+                    messages.append({"role": "assistant", "content": content})
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": (
+                                "You described the file in conversational text, but did not output an action code block. "
+                                "To create the file on disk, you MUST output:\n"
+                                "```action:write_file\n"
+                                '{"path": "<filename>", "content": "<exact file content>"}\n'
+                                "```\n"
+                                "Please output the action block now."
+                            ),
+                        }
+                    )
+                    continue
+
                 result.final_response = content
                 if content.strip():
                     console.print(f"\n[bold green]Agent Response:[/]\n{content.strip()}\n")
+                break
+
+            # If all requested actions are duplicate writes of files already created, finish
+            is_redundant = True
+            for act in actions_to_run:
+                target_path = act["args"].get("path")
+                if act["name"] == "write_file" and target_path not in result.files_created:
+                    is_redundant = False
+                elif act["name"] != "write_file":
+                    is_redundant = False
+
+            if is_redundant and result.files_created:
+                result.final_response = content
                 break
 
             # 3. Execute requested actions
@@ -227,7 +304,10 @@ class AutonomousAgentRunner:
                 messages.append({"role": "assistant", "content": content})
                 feedback_lines = [f"Result of {out['name']}:\n{out['output']}" for out in tool_outputs]
                 feedback_prompt = "\n\n".join(feedback_lines)
-                feedback_prompt += "\n\nContinue with next actions or provide your final conclusion if finished."
+                feedback_prompt += (
+                    "\n\nIf the task is now complete, provide your final response and summary without outputting further action blocks. "
+                    "Otherwise, output the next action block."
+                )
                 messages.append({"role": "user", "content": feedback_prompt})
 
         # Summary Display

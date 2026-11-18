@@ -22,6 +22,11 @@ from smart_ai_cli.ui import (
 app = typer.Typer(help="Interactive chat session and one-shot queries.")
 CHAT_INDENT = "    "
 
+ACTION_PROMPT_REGEX = re.compile(
+    r"^(can you\s+)?(please\s+)?(create|make|write|edit|update|modify|read|list|delete|touch)\s+(a\s+|an\s+|the\s+)?([a-zA-Z0-9_\-]+\s+)?(file|folder|directory|script|code|[\w\-.]+\.[a-zA-Z0-9]+)\b",
+    re.IGNORECASE,
+)
+
 
 @app.command("chat")
 def chat_cmd(
@@ -120,8 +125,11 @@ def chat_cmd(
                 f"{CHAT_INDENT}  /help             - Display this help message"
             )
             continue
-        elif user_input.startswith("/do ") or user_input.startswith("/task "):
-            task_text = user_input.split(" ", 1)[1].strip()
+        is_action_prompt = bool(ACTION_PROMPT_REGEX.match(user_input.strip()))
+        if user_input.startswith("/do ") or user_input.startswith("/task ") or is_action_prompt:
+            task_text = user_input
+            if user_input.startswith("/do ") or user_input.startswith("/task "):
+                task_text = user_input.split(" ", 1)[1].strip()
             if task_text:
                 runner = AutonomousAgentRunner()
                 runner.execute_task(task_text, policy=active_policy, temperature=active_temp)
@@ -281,13 +289,7 @@ def ask_cmd(
     active_temp = temperature if temperature is not None else cfg.default_temperature
 
     # Check if this is an autonomous file/task operation
-    is_action_prompt = bool(
-        re.match(
-            r"^(create|make|write|edit|update|modify|read|list)\s+(the\s+)?(file|folder|directory|script)\b",
-            prompt.strip(),
-            re.IGNORECASE,
-        )
-    )
+    is_action_prompt = bool(ACTION_PROMPT_REGEX.match(prompt.strip()))
     if agent_mode or is_action_prompt:
         runner = AutonomousAgentRunner()
         res = runner.execute_task(
