@@ -135,6 +135,12 @@ def chat_cmd(
                 runner.execute_task(task_text, policy=active_policy, temperature=active_temp)
                 continue
 
+        # Sanitize existing history to prevent corrupted or empty turns from lingering
+        conversation[:] = [
+            m for m in conversation
+            if (m.get("content") or "").strip() or m.get("tool_calls")
+        ]
+
         conversation.append({"role": "user", "content": user_input})
 
         try:
@@ -186,7 +192,11 @@ def chat_cmd(
                 sys.stdout.write("\n\n")
                 sys.stdout.flush()
 
-                conversation.append({"role": "assistant", "content": full_reply})
+                if full_reply and full_reply.strip():
+                    conversation.append({"role": "assistant", "content": full_reply})
+                else:
+                    if conversation and conversation[-1].get("role") == "user":
+                        conversation.pop()
 
                 if meta_chunk:
                     routing = meta_chunk.get("routing", {})
@@ -215,11 +225,15 @@ def chat_cmd(
                     resp = client.chat(conversation, policy=active_policy, temperature=active_temp)
 
                 console.print()
-                reply_text = resp["choices"][0]["message"]["content"]
+                reply_text = resp["choices"][0]["message"]["content"] or ""
                 indented_lines = "\n".join(f"{CHAT_INDENT}{line}" for line in reply_text.splitlines())
                 console.print(indented_lines)
                 console.print()
-                conversation.append({"role": "assistant", "content": reply_text})
+                if reply_text and reply_text.strip():
+                    conversation.append({"role": "assistant", "content": reply_text})
+                else:
+                    if conversation and conversation[-1].get("role") == "user":
+                        conversation.pop()
 
                 routing = resp.get("routing", {})
                 usage = resp.get("usage", {})
@@ -244,6 +258,8 @@ def chat_cmd(
                 )
 
         except AuthenticationError as exc:
+            if conversation and conversation[-1].get("role") == "user":
+                conversation.pop()
             sys.stdout.write("\n")
             console.print(f"{CHAT_INDENT}[bold red]✖[/bold red] Chat request failed: {exc}")
             console.print(
@@ -263,9 +279,18 @@ def chat_cmd(
                 except (KeyboardInterrupt, EOFError):
                     break
         except GatewayClientError as exc:
+            if conversation and conversation[-1].get("role") == "user":
+                conversation.pop()
             sys.stdout.write("\n")
             console.print(f"{CHAT_INDENT}[bold red]✖[/bold red] Chat request failed: {exc}")
+        except KeyboardInterrupt:
+            if conversation and conversation[-1].get("role") == "user":
+                conversation.pop()
+            sys.stdout.write("\n")
+            console.print(f"{CHAT_INDENT}[dim]Response cancelled by user.[/dim]")
         except Exception as exc:
+            if conversation and conversation[-1].get("role") == "user":
+                conversation.pop()
             sys.stdout.write("\n")
             console.print(f"{CHAT_INDENT}[bold red]✖[/bold red] Unexpected error: {exc}")
 

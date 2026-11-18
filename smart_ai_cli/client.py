@@ -244,6 +244,29 @@ class GatewayClient:
 
     # --- Chat Completions & Streaming ---
 
+    def _sanitize_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Sanitizes messages for schema compliance, filtering out empty text-only messages."""
+        sanitized: List[Dict[str, Any]] = []
+        for msg in messages:
+            content = msg.get("content")
+            if content is None:
+                content = ""
+            elif not isinstance(content, str):
+                content = str(content)
+
+            # Omit empty text messages without tool calls to avoid string_too_short validation errors
+            if not content.strip() and not msg.get("tool_calls"):
+                continue
+
+            sanitized.append({**msg, "content": content})
+
+        if not sanitized and messages:
+            fallback = messages[-1]
+            raw_content = fallback.get("content") or ""
+            sanitized.append({**fallback, "content": raw_content.strip() or " "})
+
+        return sanitized
+
     def chat(
         self,
         messages: List[Dict[str, Any]],
@@ -255,7 +278,7 @@ class GatewayClient:
         """Executes a standard non-streaming chat completion."""
         url = f"{self.base_url}/v1/chat"
         payload: Dict[str, Any] = {
-            "messages": messages,
+            "messages": self._sanitize_messages(messages),
             "routing": {"policy": policy},
             "parameters": {
                 "temperature": temperature,
@@ -284,7 +307,7 @@ class GatewayClient:
         """Streams chat completion tokens and metadata chunks over Server-Sent Events."""
         url = f"{self.base_url}/v1/chat"
         payload = {
-            "messages": messages,
+            "messages": self._sanitize_messages(messages),
             "routing": {"policy": policy},
             "parameters": {
                 "temperature": temperature,

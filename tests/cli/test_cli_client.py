@@ -42,3 +42,32 @@ def test_client_error_classification():
     resp_400 = httpx.Response(400, json={"error": {"message": "Bad request format"}})
     with pytest.raises(GatewayClientError, match="Bad request format"):
         client._handle_response_error(resp_400)
+
+
+def test_client_sanitize_messages():
+    """Verify empty text-only messages are stripped before sending to prevent 422 errors."""
+    client = GatewayClient(base_url="http://localhost:8000")
+
+    # Mixture of valid and empty messages
+    messages = [
+        {"role": "user", "content": "Hello"},
+        {"role": "assistant", "content": ""},
+        {"role": "assistant", "content": "   "},
+        {"role": "assistant", "content": None},
+        {"role": "user", "content": "hy"},
+    ]
+    sanitized = client._sanitize_messages(messages)
+    assert len(sanitized) == 2
+    assert sanitized[0] == {"role": "user", "content": "Hello"}
+    assert sanitized[1] == {"role": "user", "content": "hy"}
+
+    # Assistant messages with tool calls should be preserved even if content is empty
+    tool_msg = {
+        "role": "assistant",
+        "content": "",
+        "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "run"}}],
+    }
+    sanitized_tools = client._sanitize_messages([tool_msg])
+    assert len(sanitized_tools) == 1
+    assert sanitized_tools[0]["tool_calls"] is not None
+

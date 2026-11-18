@@ -249,3 +249,32 @@ def test_cli_chat_command_non_streaming(monkeypatch):
     assert "Assistant:" not in res.stdout
     assert "You:" not in res.stdout
     assert "❯" in res.stdout
+
+
+def test_cli_chat_multiturn_resilience_to_empty_and_failures(monkeypatch):
+    """Verify that empty replies or failed turns do not leave corrupted history for subsequent turns."""
+    calls = []
+
+    def mock_stream(self, conversation, policy=None, temperature=None):
+        calls.append(list(conversation))
+        if len(calls) == 1:
+            # First turn: simulate empty reply or failure
+            yield {"choices": [{"delta": {}}]}
+        else:
+            # Second turn (e.g. "hy"): reply with valid content
+            yield {"choices": [{"delta": {"content": "Hello! How can I help?"}}]}
+
+    monkeypatch.setattr(GatewayClient, "stream_chat", mock_stream)
+
+    # Turn 1: "first message" (returns empty)
+    # Turn 2: "hy" (should NOT have empty assistant message in history)
+    res = runner.invoke(app, ["chat"], input="first message\nhy\n/exit\n")
+    assert res.exit_code == 0
+    assert "Hello! How can I help?" in res.stdout
+
+    # Verify calls
+    assert len(calls) == 2
+    # In call 2, verify no empty assistant messages were passed
+    for msg in calls[1]:
+        assert msg.get("content") != ""
+

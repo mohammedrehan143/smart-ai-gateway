@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 class ChatMessageSchema(BaseModel):
     role: Literal["system", "user", "assistant", "tool"]
-    content: str = Field(..., min_length=1)
+    content: Optional[str] = Field(default="")
     name: Optional[str] = None
     tool_calls: Optional[List[Dict[str, Any]]] = None
     tool_call_id: Optional[str] = None
@@ -54,7 +54,7 @@ class ChatCompletionRequest(BaseModel):
 
 class ChoiceMessage(BaseModel):
     role: Literal["assistant"] = "assistant"
-    content: str
+    content: Optional[str] = ""
     tool_calls: Optional[List[Dict[str, Any]]] = None
 
 

@@ -37,3 +37,22 @@ def test_invalid_temperature_bounds():
 def test_invalid_policy():
     with pytest.raises(ValidationError):
         RoutingSchema(policy="invalid_policy")  # type: ignore
+
+
+def test_empty_content_in_chat_message_schema():
+    """Verify assistant messages and tool call messages can have empty/optional content."""
+    msg = ChatMessageSchema(role="assistant", content="")
+    assert msg.content == ""
+    assert msg.role == "assistant"
+
+    msg_none = ChatMessageSchema(role="assistant")
+    assert msg_none.content == ""
+
+    msg_tools = ChatMessageSchema(
+        role="assistant",
+        content="",
+        tool_calls=[{"id": "call_1", "type": "function", "function": {"name": "test", "arguments": "{}"}}],
+    )
+    assert msg_tools.tool_calls is not None
+    assert len(msg_tools.tool_calls) == 1
+
