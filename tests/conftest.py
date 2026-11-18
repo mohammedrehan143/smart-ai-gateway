@@ -2,13 +2,23 @@
 
 import os
 import tempfile
+import pytest
 from httpx import ASGITransport, AsyncClient
 import pytest_asyncio
 
 from app.api.deps import get_orchestrator, get_repository
+from app.core.rate_limiter import default_rate_limiter
 from app.main import app
 from app.repositories.sqlite import SqliteTraceRepository
 from app.services.orchestrator import ChatOrchestrator
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter_state():
+    """Ensures rate limits and failed auth lockouts do not leak between test cases."""
+    default_rate_limiter.clear()
+    yield
+    default_rate_limiter.clear()
 
 
 @pytest_asyncio.fixture

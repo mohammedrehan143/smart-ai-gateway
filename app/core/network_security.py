@@ -46,7 +46,7 @@ BLOCKED_NETWORKS = [
 def is_ip_blocked(ip_addr: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     """Checks whether an IP address falls within any blocked/private network range."""
     # Special exception for local development and test mode when loopback is explicitly enabled
-    if settings.ALLOW_LOOPBACK_IN_DEV and settings.APP_ENV != "production":
+    if settings.ALLOW_LOOPBACK_IN_DEV and settings.APP_ENV == "local":
         if ip_addr.is_loopback or str(ip_addr) in ("127.0.0.1", "::1"):
             return False
 
@@ -108,12 +108,12 @@ def validate_provider_base_url(url: Optional[str]) -> Optional[str]:
         # Not a raw IP literal, proceed to DNS resolution
         pass
 
-    # In local/test mode, allow localhost if ALLOW_LOOPBACK_IN_DEV is enabled
+    # In local development mode, allow localhost if ALLOW_LOOPBACK_IN_DEV is enabled
     if lower_host == "localhost":
-        if settings.ALLOW_LOOPBACK_IN_DEV and settings.APP_ENV != "production":
+        if settings.ALLOW_LOOPBACK_IN_DEV and settings.APP_ENV == "local":
             return cleaned_url.rstrip("/")
         else:
-            raise SSRFSecurityError("Access to localhost is prohibited in production mode.")
+            raise SSRFSecurityError("Access to localhost is prohibited in non-local environments.")
 
     # 4. DNS Resolution & Rebinding protection
     try:

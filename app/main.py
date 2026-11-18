@@ -34,6 +34,9 @@ from app.core.logging import (
 configure_logging(settings.LOG_LEVEL)
 logger = get_logger("app.main")
 
+HTTP_422_CODE = getattr(status, "HTTP_422_UNPROCESSABLE_CONTENT", 422)
+HTTP_413_CODE = getattr(status, "HTTP_413_CONTENT_TOO_LARGE", 413)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
@@ -86,7 +89,7 @@ async def security_and_limits_middleware(request: Request, call_next):
     content_length = request.headers.get("content-length")
     if content_length and int(content_length) > settings.MAX_REQUEST_BODY_BYTES:
         return JSONResponse(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=HTTP_413_CODE,
             content={
                 "error": {
                     "type": "invalid_request",
@@ -170,7 +173,7 @@ async def gateway_error_handler(request: Request, exc: GatewayError):
 @app.exception_handler(RequestValidationError)
 async def validation_error_handler(request: Request, exc: RequestValidationError):
     return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        status_code=HTTP_422_CODE,
         content={
             "error": {
                 "type": "invalid_request",

@@ -7,9 +7,9 @@ import json
 import math
 import re
 import time
-from collections import Counter
+from collections import Counter, OrderedDict
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Set, Tuple
+from typing import List, Optional, Set, Tuple
 from app.core.logging import get_logger
 from app.domain.entities import ChatMessage, GenerationParameters, NormalizedCompletion
 
@@ -30,13 +30,21 @@ class SemanticCacheEntry:
 
 
 class AdvancedSemanticCache:
-    """Two-tier response cache supporting exact matching, semantic similarity, and tenant isolation."""
+    """Two-tier response cache supporting exact matching, semantic similarity, tenant isolation, and LRU eviction."""
 
-    def __init__(self, default_ttl_seconds: int = 300, similarity_threshold: float = 0.95):
+    def __init__(
+        self,
+        default_ttl_seconds: int = 300,
+        similarity_threshold: float = 0.95,
+        max_exact_entries: int = 5000,
+        max_semantic_entries: int = 2000,
+    ):
         self.default_ttl = default_ttl_seconds
         self.similarity_threshold = similarity_threshold
-        # Exact cache: Dict[exact_key, (completion, expires_at)]
-        self._exact_cache: Dict[str, Tuple[NormalizedCompletion, float]] = {}
+        self.max_exact_entries = max_exact_entries
+        self.max_semantic_entries = max_semantic_entries
+        # Exact cache: OrderedDict[exact_key, (completion, expires_at)]
+        self._exact_cache: OrderedDict[str, Tuple[NormalizedCompletion, float]] = OrderedDict()
         # Semantic cache: List[SemanticCacheEntry]
         self._semantic_entries: List[SemanticCacheEntry] = []
         self.exact_hits: int = 0
@@ -50,7 +58,7 @@ class AdvancedSemanticCache:
         messages: List[ChatMessage],
         parameters: GenerationParameters,
     ) -> str:
-        """Deterministic SHA-256 cache key including tenant isolation and model identity."""
+        """Deterministic SHA-256 cache key prefixed with tenant isolation and model identity."""
         normalized = [{"role": m.role, "content": m.content.strip()} for m in messages]
         payload = {
             "tenant_id": tenant_id,
@@ -59,7 +67,8 @@ class AdvancedSemanticCache:
             "temperature": parameters.temperature,
             "max_output_tokens": parameters.max_output_tokens,
         }
-        return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+        digest = hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()
+        return f"{tenant_id}:{digest}"
 
     def _normalize_text(self, text: str) -> str:
         return re.sub(r"\s+", " ", text.lower().strip())
@@ -115,10 +124,11 @@ class AdvancedSemanticCache:
         if exact_key in self._exact_cache:
             comp, expires_at = self._exact_cache[exact_key]
             if now < expires_at:
+                self._exact_cache.move_to_end(exact_key)
                 self.exact_hits += 1
                 return comp, "hit_exact"
             else:
-                del self._exact_cache[exact_key]
+                self._exact_cache.pop(exact_key, None)
 
         # 2. L2 Semantic Match (Only for deterministic temperature <= 0.2)
         if parameters.temperature > 0.2:
@@ -160,17 +170,36 @@ class AdvancedSemanticCache:
         ttl_seconds: Optional[int] = None,
     ) -> None:
         ttl = ttl_seconds if ttl_seconds is not None else self.default_ttl
-        expires_at = time.time() + ttl
+        now = time.time()
+        expires_at = now + ttl
 
         # Set L1 Exact
         exact_key = self.compute_exact_key(tenant_id, model_alias, messages, parameters)
-        self._exact_cache[exact_key] = (completion, expires_at)
+        if exact_key in self._exact_cache:
+            self._exact_cache[exact_key] = (completion, expires_at)
+            self._exact_cache.move_to_end(exact_key)
+        else:
+            # Enforce bounded LRU capacity
+            if len(self._exact_cache) >= self.max_exact_entries:
+                expired = [k for k, v in self._exact_cache.items() if now > v[1]]
+                for k in expired:
+                    self._exact_cache.pop(k, None)
+                while len(self._exact_cache) >= self.max_exact_entries:
+                    self._exact_cache.popitem(last=False)
+
+            self._exact_cache[exact_key] = (completion, expires_at)
 
         # Set L2 Semantic (Only if deterministic)
         if parameters.temperature <= 0.2:
             user_text = " ".join(m.content for m in messages if m.role == "user")
             norm_prompt = self._normalize_text(user_text)
             words = set(re.findall(r"\w+", norm_prompt))
+
+            # Enforce bounded capacity on semantic list
+            if len(self._semantic_entries) >= self.max_semantic_entries:
+                self._semantic_entries = [e for e in self._semantic_entries if now <= e.expires_at]
+                while len(self._semantic_entries) >= self.max_semantic_entries:
+                    self._semantic_entries.pop(0)
 
             self._semantic_entries.append(
                 SemanticCacheEntry(
@@ -187,13 +216,16 @@ class AdvancedSemanticCache:
 
     def invalidate_tenant(self, tenant_id: str) -> int:
         """Invalidates all cached entries belonging to a specific tenant."""
-        initial_count = len(self._semantic_entries)
+        initial_semantic = len(self._semantic_entries)
         self._semantic_entries = [e for e in self._semantic_entries if e.tenant_id != tenant_id]
-        # Invalidate exact cache entries for tenant
-        exact_to_del = [k for k in self._exact_cache if k.startswith(tenant_id)]
+        semantic_removed = initial_semantic - len(self._semantic_entries)
+
+        prefix = f"{tenant_id}:"
+        exact_to_del = [k for k in self._exact_cache if k.startswith(prefix)]
         for k in exact_to_del:
-            del self._exact_cache[k]
-        return initial_count - len(self._semantic_entries)
+            self._exact_cache.pop(k, None)
+
+        return semantic_removed + len(exact_to_del)
 
     def clear(self) -> None:
         self._exact_cache.clear()

@@ -60,14 +60,23 @@ def chat_cmd(
             continue
         elif user_input.startswith("/policy"):
             parts = user_input.split()
-            if len(parts) > 1 and parts[1] in ("adaptive", "always_cheap", "always_strong"):
-                active_policy = parts[1]
+            valid_policies = (
+                "adaptive",
+                "always_cheap",
+                "always_strong",
+                "cost_optimized",
+                "balanced",
+                "quality_first",
+                "performance_optimized",
+            )
+            if len(parts) > 1 and parts[1].lower() in valid_policies:
+                active_policy = parts[1].lower()
                 console.print(
                     f"{CHAT_INDENT}[bold green]✔[/bold green] Switched routing policy to: [bold yellow]{active_policy}[/]"
                 )
             else:
                 console.print(
-                    f"{CHAT_INDENT}[bold yellow]▲[/bold yellow] Usage: /policy <adaptive | always_cheap | always_strong>"
+                    f"{CHAT_INDENT}[bold yellow]▲[/bold yellow] Usage: /policy <adaptive | always_cheap | always_strong | cost_optimized | balanced | quality_first | performance_optimized>"
                 )
             continue
         elif user_input == "/help":

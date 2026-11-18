@@ -53,7 +53,7 @@ class Settings(BaseSettings):
     MAX_REQUEST_BODY_BYTES: int = 1_048_576  # 1 MB protection against DoS
     RATE_LIMIT_RPM: int = 120  # Default 120 requests/minute per client
     RATE_LIMIT_ENABLED: bool = True
-    MAX_FAILED_AUTH_ATTEMPTS: int = 10  # Brute-force protection: max failed auths in window
+    MAX_FAILED_AUTH_ATTEMPTS: int = 5  # Brute-force protection: max failed auths in window
 
     # SSRF & Network Protection
     SSRF_PROTECTION_ENABLED: bool = True

@@ -99,5 +99,12 @@ class InMemoryRateLimiter:
         if client_ip in self._lockouts:
             del self._lockouts[client_ip]
 
+    def clear(self) -> None:
+        """Resets all tracking windows, counters, and lockouts."""
+        self._request_windows.clear()
+        self._tenant_windows.clear()
+        self._failed_auth_windows.clear()
+        self._lockouts.clear()
+
 
 default_rate_limiter = InMemoryRateLimiter()
