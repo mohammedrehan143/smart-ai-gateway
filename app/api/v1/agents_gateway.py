@@ -21,6 +21,7 @@ router = APIRouter(tags=["Agents & Gateway"])
 # Pydantic Request / Response Schemas
 # ---------------------------------------------------------------------------
 
+
 class AgentConfigureRequest(BaseModel):
     agent_type: Literal["weak", "strong"] = Field(..., description="Agent tier to configure: weak or strong")
     provider: str = Field(..., description="Provider name: openai, groq, google, anthropic, openai_compatible")
@@ -58,6 +59,7 @@ def _resolve_effective_user(user: AuthenticatedUser, x_user_id: Optional[str]) -
 # ---------------------------------------------------------------------------
 # 1. Agent Configuration Endpoints (/api/agents)
 # ---------------------------------------------------------------------------
+
 
 @router.post(
     "/api/agents/configure",
@@ -163,6 +165,7 @@ async def delete_agent_configuration(
 # 2. Real Gateway Execution Endpoints (/api/gateway)
 # ---------------------------------------------------------------------------
 
+
 @router.post(
     "/api/gateway/execute",
     status_code=status.HTTP_200_OK,
@@ -221,6 +224,7 @@ async def get_gateway_history(
 # ---------------------------------------------------------------------------
 # 3. Analytics Endpoints (/api/analytics)
 # ---------------------------------------------------------------------------
+
 
 @router.get(
     "/api/analytics/overview",

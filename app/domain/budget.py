@@ -12,8 +12,8 @@ class BudgetLimit:
     user_id: str
     project_id: str
     max_cost_per_request: Optional[float] = None  # e.g., $0.05
-    daily_budget: Optional[float] = None          # e.g., $10.00
-    monthly_budget: Optional[float] = None        # e.g., $200.00
+    daily_budget: Optional[float] = None  # e.g., $10.00
+    monthly_budget: Optional[float] = None  # e.g., $200.00
 
 
 class BudgetController:
@@ -77,12 +77,18 @@ class BudgetController:
         # 2. Daily budget check
         current_daily = self._daily_spend.get((user_id, project_id, day_key), 0.0)
         if limit.daily_budget is not None and (current_daily + estimated_cost) > limit.daily_budget:
-            return False, f"Daily project budget exceeded: current ${current_daily:.4f} + est ${estimated_cost:.4f} > limit ${limit.daily_budget:.4f}"
+            return (
+                False,
+                f"Daily project budget exceeded: current ${current_daily:.4f} + est ${estimated_cost:.4f} > limit ${limit.daily_budget:.4f}",
+            )
 
         # 3. Monthly budget check
         current_monthly = self._monthly_spend.get((user_id, project_id, month_key), 0.0)
         if limit.monthly_budget is not None and (current_monthly + estimated_cost) > limit.monthly_budget:
-            return False, f"Monthly project budget exceeded: current ${current_monthly:.4f} + est ${estimated_cost:.4f} > limit ${limit.monthly_budget:.4f}"
+            return (
+                False,
+                f"Monthly project budget exceeded: current ${current_monthly:.4f} + est ${estimated_cost:.4f} > limit ${limit.monthly_budget:.4f}",
+            )
 
         return True, None
 

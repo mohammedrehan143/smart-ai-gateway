@@ -69,6 +69,7 @@ class BYOKManager:
         try:
             import sqlite3
             from pathlib import Path
+
             p = Path(self._db_path)
             if p.parent and str(p.parent) != ".":
                 p.parent.mkdir(parents=True, exist_ok=True)
@@ -262,9 +263,7 @@ class BYOKManager:
                 conn.close()
 
         return [
-            cred.to_safe_dict()
-            for (uid, _), cred in self._credentials.items()
-            if uid == user_id and cred.is_active
+            cred.to_safe_dict() for (uid, _), cred in self._credentials.items() if uid == user_id and cred.is_active
         ]
 
     def delete_credential(self, user_id: str, provider: str) -> bool:

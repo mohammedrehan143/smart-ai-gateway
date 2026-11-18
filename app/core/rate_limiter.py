@@ -14,6 +14,8 @@ class InMemoryRateLimiter:
     def __init__(self):
         # Maps client_id -> list of timestamp floats
         self._request_windows: Dict[str, List[float]] = defaultdict(list)
+        # Maps tenant_id -> list of timestamp floats
+        self._tenant_windows: Dict[str, List[float]] = defaultdict(list)
         # Maps client_ip -> list of failed auth timestamp floats
         self._failed_auth_windows: Dict[str, List[float]] = defaultdict(list)
         # Maps client_ip -> lockout expiration timestamp float
@@ -44,6 +46,26 @@ class InMemoryRateLimiter:
             return False, retry_after
 
         self._request_windows[client_id].append(now)
+        return True, 0
+
+    def check_tenant_rate_limit(self, tenant_id: str, limit_per_minute: Optional[int] = None) -> Tuple[bool, int]:
+        """Checks if a tenant exceeded their request rate quota across all their connections."""
+        if not settings.RATE_LIMIT_ENABLED:
+            return True, 0
+
+        rpm = limit_per_minute or (settings.RATE_LIMIT_RPM * 2)
+        now = time.time()
+        window_start = now - 60.0
+
+        ts_list = self._cleanup_old_entries(self._tenant_windows[tenant_id], window_start)
+        self._tenant_windows[tenant_id] = ts_list
+
+        if len(ts_list) >= rpm:
+            oldest = ts_list[0]
+            retry_after = max(1, int(60.0 - (now - oldest)))
+            return False, retry_after
+
+        self._tenant_windows[tenant_id].append(now)
         return True, 0
 
     def record_failed_auth(self, client_ip: str) -> None:

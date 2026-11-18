@@ -156,6 +156,7 @@ async def test_fallback_records_reason_and_preserves_requirements(
 
     and transparently logs recovery without automatically jumping to an unapproved model.
     """
+
     class PrimaryFailsAdapter(BaseProviderAdapter):
         def __init__(self):
             self.calls = []
@@ -199,7 +200,9 @@ async def test_fallback_records_reason_and_preserves_requirements(
     data = resp.json()
 
     assert data["routing"]["fallback_used"] is True
-    assert "Simulated upstream 503" in data["routing"]["fallback_reason"] or "failed" in data["routing"]["fallback_reason"]
+    assert (
+        "Simulated upstream 503" in data["routing"]["fallback_reason"] or "failed" in data["routing"]["fallback_reason"]
+    )
     assert data["routing"]["complexity"] == "SIMPLE"
     assert "Recovered from candidate fallback" in data["choices"][0]["message"]["content"]
 
@@ -214,8 +217,12 @@ def test_cost_comparison_against_baseline():
     in_tokens = 50
     out_tokens = 200
 
-    cheap_cost_per_query = (in_tokens / 1e6 * cheap_rate.input_rate_per_million) + (out_tokens / 1e6 * cheap_rate.output_rate_per_million)
-    strong_cost_per_query = (in_tokens / 1e6 * strong_rate.input_rate_per_million) + (out_tokens / 1e6 * strong_rate.output_rate_per_million)
+    cheap_cost_per_query = (in_tokens / 1e6 * cheap_rate.input_rate_per_million) + (
+        out_tokens / 1e6 * cheap_rate.output_rate_per_million
+    )
+    strong_cost_per_query = (in_tokens / 1e6 * strong_rate.input_rate_per_million) + (
+        out_tokens / 1e6 * strong_rate.output_rate_per_million
+    )
 
     # In naive routing:
     # 1. "What is Python?" -> cheap ($0.0001275)

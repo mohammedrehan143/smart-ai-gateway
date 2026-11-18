@@ -27,13 +27,13 @@ EXPERT_PATTERNS = [
 
 # Complex Regex Patterns: Advanced technical reasoning, difficult debugging, system architecture, deep analysis
 COMPLEX_PATTERNS = [
-    r"\b(distributed banking|distributed transaction|two-phase commit|2pc|saga pattern|event sourcing)\b",
-    r"\b(system architecture|scalable architecture|distributed architecture|microservices architecture|high-throughput distributed)\b",
-    r"\b(?:scalable|distributed|system|microservices|multi-agent)(?:\s+[\w\-]+){0,2}\s+architecture\b",
+    r"\b(distributed system|scalable architecture|distributed architecture|microservices architecture|system architecture)\b",
+    r"\b(distributed banking|distributed transaction|two-phase commit|2pc|saga pattern|event sourcing|cqrs)\b",
+    r"\b(?:scalable|distributed|system|microservices|multi-agent)(?:\s+[\w\-]+){0,2}\s+(?:architecture|system)\b",
     r"\b(multi-agent\s+ai\s+platform|multi-agent\s+orchestration|agentic\s+workflow\s+architecture)\b",
-    r"\b(paxos|raft|consensus protocol|sharding strategy)\b",
-    r"\b(debug.*asynchronous|debug.*concurrency|deadlock|race condition|memory leak|heap dump|segfault)\b",
-    r"\b(profiling bottleneck|distributed deadlock|goroutine leak|lock contention)\b",
+    r"\b(paxos|raft|distributed consensus|sharding strategy|partitioning scheme|database sharding)\b",
+    r"\b(multi-threaded|race condition|deadlock|thread contention|lock contention|goroutine leak)\b",
+    r"\b(debug.*asynchronous|debug.*concurrency|deadlock|race condition|memory leak|heap dump|segfault|profiling bottleneck|asyncio deadlock)\b",
     r"\b(trade-off analysis between.*and.*under|compare the pros and cons of|pros and cons of)\b",
     r"\b(overfitting and distribution shift|distribution shift|covariate shift|concept drift|gradient vanishing|transformer attention mechanism)\b",
     r"(review|audit|debug|optimize)\s+(?:this|the)?\s*(?:python|javascript|typescript|c\+\+|code|implementation|function)?[:\s\n]+```",
@@ -44,12 +44,13 @@ COMPLEX_PATTERNS = [
 MODERATE_PATTERNS = [
     r"\b(explain\b.*(?:example|step by step|mechanism of|how it works)|how does\b.*\bwork|compare and contrast)\b",
     r"\b(write a\s+(?:python|javascript|typescript|sql|c\+\+|java|go|rust)?\s*(?:function|script|query|component|class|program))\b",
-    r"\b(reverse a string|binary search|bubble sort|fibonacci|palindrome|linked list|two sum|fizzbuzz)\b",
-    r"\b(create (?:a|an)\s+(?:[\w\-]+\s+)?(?:button|form|endpoint|route|api|modal|component))\b",
+    r"\b(reverse a string|reverse string|binary search|bubble sort|fibonacci|palindrome|linked list|two sum|fizzbuzz)\b",
+    r"\b(create (?:a|an)\s+(?:[\w\-]+\s+)?(?:button|form|endpoint|route|api|modal|component)|login form in react|basic react login form)\b",
     r"\b(draft a\s+(?:polite|professional)?\s*(?:email|letter|proposal|memo|cover letter|outline|blog post))\b",
     r"\b(step 1.*step 2|first.*then.*finally|step by step)\b",
     r"\b(calculate (?:the\s+)?(?:compound interest|interest|total|area|volume|perimeter|standard deviation))\b",
-    r"\b(summarize|summary of|tl;dr|tldr|key takeaways|executive summary|distill this)\b",
+    r"\b(convert\s+\d+\s*(?:km|kilometres?|miles?|meters?|kg|pounds?|celsius|fahrenheit)\s+to\b)",
+    r"\b(summarise|summarize|summary of|tl;dr|tldr|key takeaways|executive summary|distill this)\b",
     r"\b(fix (?:this|the)?\s*(?:bug|error|issue|exception)|traceback:)\b",
     r"\b(debug this|help fix)\b",
 ]
@@ -89,8 +90,11 @@ class ComplexityClassifier:
     """Classifies user requests into SIMPLE, MODERATE, COMPLEX, or EXPERT based on reasoning depth and required capabilities."""
 
     @classmethod
-    def classify(cls, messages: List[ChatMessage], has_tools: bool = False, format_json: bool = False) -> ClassificationResult:
+    def classify(
+        cls, messages: List[ChatMessage], has_tools: bool = False, format_json: bool = False
+    ) -> ClassificationResult:
         from app.core.logging import get_logger
+
         logger = get_logger("app.domain.classifier")
 
         # Classify the latest user prompt independently to prevent history contamination in multi-turn chat
@@ -116,26 +120,30 @@ class ComplexityClassifier:
             if re.search(p, lower_text):
                 signals.append(f"expert_match:{p}")
                 required_capabilities.update(["deep_reasoning", "security_analysis"])
-                return _log_and_return(ClassificationResult(
-                    complexity=ComplexityLevel.EXPERT,
-                    reason="High-stakes technical reasoning, demanding multi-stage problem, or specialized security analysis.",
-                    required_capabilities=required_capabilities,
-                    confidence=0.98,
-                    signals=signals,
-                ))
+                return _log_and_return(
+                    ClassificationResult(
+                        complexity=ComplexityLevel.EXPERT,
+                        reason="High-stakes technical reasoning, demanding multi-stage problem, or specialized security analysis.",
+                        required_capabilities=required_capabilities,
+                        confidence=0.98,
+                        signals=signals,
+                    )
+                )
 
         # 2. Check for COMPLEX triggers
         for p in COMPLEX_PATTERNS:
             if re.search(p, lower_text):
                 signals.append(f"complex_match:{p}")
                 required_capabilities.update(["complex_code", "debugging", "architecture"])
-                return _log_and_return(ClassificationResult(
-                    complexity=ComplexityLevel.COMPLEX,
-                    reason="Advanced technical reasoning, complex architecture design, or deep debugging diagnostics required.",
-                    required_capabilities=required_capabilities,
-                    confidence=0.95,
-                    signals=signals,
-                ))
+                return _log_and_return(
+                    ClassificationResult(
+                        complexity=ComplexityLevel.COMPLEX,
+                        reason="Advanced technical reasoning, complex architecture design, or deep debugging diagnostics required.",
+                        required_capabilities=required_capabilities,
+                        confidence=0.95,
+                        signals=signals,
+                    )
+                )
 
         # 3. Check for SIMPLE Definition & Greetings BEFORE general keywords
         # If the user asks a definitional query (e.g. "What is Python?", "What is an error?")
@@ -144,58 +152,70 @@ class ComplexityClassifier:
             if re.search(p, lower_text):
                 signals.append("simple_greeting")
                 required_capabilities.add("general_knowledge")
-                return _log_and_return(ClassificationResult(
-                    complexity=ComplexityLevel.SIMPLE,
-                    reason="Basic greeting or conversational pleasantry; minimal reasoning required.",
-                    required_capabilities=required_capabilities,
-                    confidence=0.99,
-                    signals=signals,
-                ))
+                return _log_and_return(
+                    ClassificationResult(
+                        complexity=ComplexityLevel.SIMPLE,
+                        reason="Basic greeting or conversational pleasantry; minimal reasoning required.",
+                        required_capabilities=required_capabilities,
+                        confidence=0.99,
+                        signals=signals,
+                    )
+                )
 
         for p in SIMPLE_DEFINITION_PATTERNS:
             if re.search(p, lower_text):
                 signals.append("simple_definition")
                 required_capabilities.add("general_knowledge")
-                return _log_and_return(ClassificationResult(
-                    complexity=ComplexityLevel.SIMPLE,
-                    reason="Basic factual or definitional question; standard knowledge lookup.",
-                    required_capabilities=required_capabilities,
-                    confidence=0.95,
-                    signals=signals,
-                ))
+                return _log_and_return(
+                    ClassificationResult(
+                        complexity=ComplexityLevel.SIMPLE,
+                        reason="Basic factual or definitional question; standard knowledge lookup.",
+                        required_capabilities=required_capabilities,
+                        confidence=0.95,
+                        signals=signals,
+                    )
+                )
 
         # 4. Check for MODERATE triggers
         for p in MODERATE_PATTERNS:
             if re.search(p, lower_text):
                 signals.append(f"moderate_match:{p}")
                 required_capabilities.update(["code_simple", "qa", "summarization"])
-                return _log_and_return(ClassificationResult(
-                    complexity=ComplexityLevel.MODERATE,
-                    reason="Detailed conceptual explanation, ordinary coding task, or structured writing.",
-                    required_capabilities=required_capabilities,
-                    confidence=0.92,
-                    signals=signals,
-                ))
+                return _log_and_return(
+                    ClassificationResult(
+                        complexity=ComplexityLevel.MODERATE,
+                        reason="Detailed conceptual explanation, ordinary coding task, or structured writing.",
+                        required_capabilities=required_capabilities,
+                        confidence=0.92,
+                        signals=signals,
+                    )
+                )
 
         # 5. Short routine heuristic: If short and no complex keywords, classify as SIMPLE
-        if len(target_prompt) < 250 and not any(k in lower_text for k in ["analyze", "design", "architect", "audit", "optimize", "evaluate"]):
+        if len(target_prompt) < 250 and not any(
+            k in lower_text for k in ["analyze", "design", "architect", "audit", "optimize", "evaluate"]
+        ):
             signals.append("short_routine_heuristic")
             required_capabilities.add("general_knowledge")
-            return _log_and_return(ClassificationResult(
-                complexity=ComplexityLevel.SIMPLE,
-                reason="Basic informational request; no advanced reasoning required.",
-                required_capabilities=required_capabilities,
-                confidence=0.90,
-                signals=signals,
-            ))
+            return _log_and_return(
+                ClassificationResult(
+                    complexity=ComplexityLevel.SIMPLE,
+                    reason="Basic informational request; no advanced reasoning required.",
+                    required_capabilities=required_capabilities,
+                    confidence=0.90,
+                    signals=signals,
+                )
+            )
 
         # Default fallback is MODERATE
         signals.append("standard_general_inquiry")
         required_capabilities.add("qa")
-        return _log_and_return(ClassificationResult(
-            complexity=ComplexityLevel.MODERATE,
-            reason="Standard general inquiry requiring moderate explanation or structured response.",
-            required_capabilities=required_capabilities,
-            confidence=0.85,
-            signals=signals,
-        ))
+        return _log_and_return(
+            ClassificationResult(
+                complexity=ComplexityLevel.MODERATE,
+                reason="Standard general inquiry requiring moderate explanation or structured response.",
+                required_capabilities=required_capabilities,
+                confidence=0.85,
+                signals=signals,
+            )
+        )

@@ -122,16 +122,16 @@ class ResponseQualityEvaluator:
             + (format_validity_score * 0.15)
         )
 
-        passed = (
-            overall_score >= quality_threshold
-            and code_correctness_score >= 0.5
-            and format_validity_score >= 0.5
-        )
+        passed = overall_score >= quality_threshold and code_correctness_score >= 0.5 and format_validity_score >= 0.5
 
         should_escalate = not passed
         escalation_reason = None
         if should_escalate:
-            escalation_reason = "; ".join(feedback) if feedback else f"Score {overall_score:.2f} below threshold {quality_threshold:.2f}"
+            escalation_reason = (
+                "; ".join(feedback)
+                if feedback
+                else f"Score {overall_score:.2f} below threshold {quality_threshold:.2f}"
+            )
 
         return InlineEvaluationResult(
             passed=passed,

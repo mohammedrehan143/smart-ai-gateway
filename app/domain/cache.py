@@ -15,10 +15,7 @@ def compute_cache_key(
     tenant_id: str = "default",
 ) -> str:
     """Compute deterministic SHA-256 cache key from model, messages, parameters, and tenant ID."""
-    normalized_messages = [
-        {"role": m.role, "content": m.content, "name": m.name}
-        for m in messages
-    ]
+    normalized_messages = [{"role": m.role, "content": m.content, "name": m.name} for m in messages]
     key_dict = {
         "tenant_id": tenant_id,
         "model": model_alias,

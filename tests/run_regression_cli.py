@@ -1,4 +1,5 @@
 """Sequential multi-turn regression test script for Smart AI Gateway."""
+
 import urllib.request
 import json
 import sys
@@ -9,7 +10,7 @@ prompts = [
     "where to check benchmark",
     "What is Python?",
     "Explain recursion",
-    "Design a scalable distributed multi-agent architecture"
+    "Design a scalable distributed multi-agent architecture",
 ]
 
 conversation = []
@@ -22,12 +23,12 @@ for i, p in enumerate(prompts, 1):
     req_body = {
         "messages": list(conversation),
         "routing": {"policy": "adaptive", "user_id": "default_user"},
-        "parameters": {"temperature": 0.2, "max_output_tokens": 256}
+        "parameters": {"temperature": 0.2, "max_output_tokens": 256},
     }
     req = urllib.request.Request(
         "http://localhost:8000/v1/chat",
         data=json.dumps(req_body).encode("utf-8"),
-        headers={"Content-Type": "application/json"}
+        headers={"Content-Type": "application/json"},
     )
     try:
         with urllib.request.urlopen(req) as resp:
@@ -50,12 +51,12 @@ for i, p in enumerate(prompts, 1):
     # Validation against requirements
     expected_agent = "Weak Agent" if i < 6 else "Strong Agent"
     expected_level = 1 if i < 6 else 3
-    passed = (agent == expected_agent and level == expected_level)
+    passed = agent == expected_agent and level == expected_level
     if not passed:
         all_passed = False
     status_symbol = "✔ PASS" if passed else "✖ FAIL"
 
-    print(f"Turn {i}: Prompt: \"{p}\"  [{status_symbol}]")
+    print(f'Turn {i}: Prompt: "{p}"  [{status_symbol}]')
     print(f"  Classification Level: {level}")
     print(f"  Reason: {routing.get('reason')}")
     print(f"  Selected Agent: {agent} (Tier: {tier})")
@@ -63,7 +64,9 @@ for i, p in enumerate(prompts, 1):
     print(f"  Model: {model}")
     print(f"  Mock Mode: {routing.get('mock_mode')}")
     print(f"  Latency: {data.get('latency_ms')}ms")
-    print(f"  Tokens: {usage.get('total_tokens')} (in: {usage.get('prompt_tokens')}, out: {usage.get('completion_tokens')})")
+    print(
+        f"  Tokens: {usage.get('total_tokens')} (in: {usage.get('prompt_tokens')}, out: {usage.get('completion_tokens')})"
+    )
     print(f"  Cost: ${usage.get('cost_estimate')}")
     print(f"  Trace ID: {data.get('trace_id')}")
     print("-" * 70)

@@ -51,13 +51,13 @@ class Settings(BaseSettings):
     MAX_INPUT_TOKENS: int = 8192
     MAX_OUTPUT_TOKENS: int = 4096
     MAX_REQUEST_BODY_BYTES: int = 1_048_576  # 1 MB protection against DoS
-    RATE_LIMIT_RPM: int = 120                 # Default 120 requests/minute per client
+    RATE_LIMIT_RPM: int = 120  # Default 120 requests/minute per client
     RATE_LIMIT_ENABLED: bool = True
-    MAX_FAILED_AUTH_ATTEMPTS: int = 10        # Brute-force protection: max failed auths in window
+    MAX_FAILED_AUTH_ATTEMPTS: int = 10  # Brute-force protection: max failed auths in window
 
     # SSRF & Network Protection
     SSRF_PROTECTION_ENABLED: bool = True
-    ALLOW_LOOPBACK_IN_DEV: bool = True        # Permitted only in local/test for mock testing
+    ALLOW_LOOPBACK_IN_DEV: bool = True  # Permitted only in local/test for mock testing
 
     # Versioning
     ROUTING_POLICY_VERSION: str = "1.0.0"
@@ -106,35 +106,35 @@ class Settings(BaseSettings):
         Raises:
             ValueError: If critical security configurations are missing or insecure in production.
         """
-        if self.APP_ENV == "production":
+        if self.APP_ENV in ("production", "staging"):
             # 1. GATEWAY_API_KEY must be configured
             if not self.GATEWAY_API_KEY or len(self.GATEWAY_API_KEY.strip()) < 16:
                 raise ValueError(
-                    "Production Security Error: GATEWAY_API_KEY must be configured with a minimum of 16 characters in production mode."
+                    f"{self.APP_ENV.capitalize()} Security Error: GATEWAY_API_KEY must be configured with a minimum of 16 characters in production mode."
                 )
 
             # 2. ENCRYPTION_MASTER_KEY must be configured and independent
             if not self.ENCRYPTION_MASTER_KEY or len(self.ENCRYPTION_MASTER_KEY.strip()) < 16:
                 raise ValueError(
-                    "Production Security Error: Dedicated ENCRYPTION_MASTER_KEY must be configured with a minimum of 16 characters in production mode."
+                    f"{self.APP_ENV.capitalize()} Security Error: Dedicated ENCRYPTION_MASTER_KEY must be configured with a minimum of 16 characters in production mode."
                 )
 
             # 3. Dedicated master key must not be identical to GATEWAY_API_KEY
             if self.ENCRYPTION_MASTER_KEY.strip() == self.GATEWAY_API_KEY.strip():
                 raise ValueError(
-                    "Production Security Error: ENCRYPTION_MASTER_KEY must be independent and not identical to GATEWAY_API_KEY."
+                    f"{self.APP_ENV.capitalize()} Security Error: ENCRYPTION_MASTER_KEY must be independent and not identical to GATEWAY_API_KEY."
                 )
 
             # 4. Wildcard CORS is strictly forbidden with credentials in production
             if "*" in self.ALLOWED_CORS_ORIGINS:
                 raise ValueError(
-                    "Production Security Error: Wildcard '*' in ALLOWED_CORS_ORIGINS is prohibited in production mode. Specify trusted origins."
+                    f"{self.APP_ENV.capitalize()} Security Error: Wildcard '*' in ALLOWED_CORS_ORIGINS is prohibited in production mode. Specify trusted origins."
                 )
 
             # 5. Mock gateway cannot be enabled in production
             if self.ENABLE_MOCK_GATEWAY:
                 raise ValueError(
-                    "Production Security Error: ENABLE_MOCK_GATEWAY cannot be set to true in production mode."
+                    f"{self.APP_ENV.capitalize()} Security Error: ENABLE_MOCK_GATEWAY cannot be set to true in production mode."
                 )
 
 

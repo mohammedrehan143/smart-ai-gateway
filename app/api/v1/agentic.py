@@ -24,9 +24,7 @@ router = APIRouter(prefix="/v1/agentic", tags=["Agentic"])
 class PlanRequest(BaseModel):
     messages: List[ChatMessageSchema] = Field(..., min_length=1)
     tools: Optional[List[Dict[str, Any]]] = None
-    collaboration_strategy: Optional[str] = Field(
-        None, description="peer_review, code_verification, or consensus"
-    )
+    collaboration_strategy: Optional[str] = Field(None, description="peer_review, code_verification, or consensus")
     force_collaboration: bool = False
 
 

@@ -65,7 +65,9 @@ class RoutingFeatures:
         return asdict(self)
 
 
-def extract_features(messages: List[ChatMessage], has_tools: bool = False, format_json: bool = False) -> RoutingFeatures:
+def extract_features(
+    messages: List[ChatMessage], has_tools: bool = False, format_json: bool = False
+) -> RoutingFeatures:
     """Extract testable deterministic complexity signals focused on the active user turn.
 
     Guarantees: Prior history provides context for token budgets, but does not falsely
@@ -85,7 +87,9 @@ def extract_features(messages: List[ChatMessage], has_tools: bool = False, forma
 
     # Extract feature flags directly from the active user turn
     has_code = any(re.search(p, latest_text, re.IGNORECASE) for p in CODE_PATTERNS) or (
-        len(messages) > 1 and any(k in latest_lower for k in ("fix", "optimize", "refactor", "run", "code")) and any(re.search(p, full_text, re.IGNORECASE) for p in CODE_PATTERNS)
+        len(messages) > 1
+        and any(k in latest_lower for k in ("fix", "optimize", "refactor", "run", "code"))
+        and any(re.search(p, full_text, re.IGNORECASE) for p in CODE_PATTERNS)
     )
     is_debugging = any(re.search(p, latest_lower) for p in ACTIVE_DEBUG_PATTERNS)
     is_multistep = any(re.search(p, latest_lower) for p in MULTISTEP_PATTERNS)

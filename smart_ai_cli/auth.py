@@ -25,6 +25,7 @@ class AuthManager:
     def _get_keyring_impl(self):
         try:
             import keyring
+
             return keyring
         except ImportError:
             return None

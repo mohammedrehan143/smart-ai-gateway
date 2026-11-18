@@ -313,7 +313,9 @@ class ChatOrchestrator:
                     "steps": [s.to_dict() for s in executed_steps],
                 }
             except Exception as collab_err:
-                logger.warning(f"Collaboration execution error ({collab_err}); falling back to single model: {model_alias}")
+                logger.warning(
+                    f"Collaboration execution error ({collab_err}); falling back to single model: {model_alias}"
+                )
                 completion = None
 
         # Fallback or Direct candidate progression execution
@@ -443,7 +445,9 @@ class ChatOrchestrator:
             selected_model_alias=final_model_alias,
             selected_provider=provider_name,
             reason_code="FALLBACK" if fallback_used else routing_decision.reason_code,
-            reason_message=f"{routing_decision.reason_message} (fallback used: {fallback_used})" if fallback_used else routing_decision.reason_message,
+            reason_message=f"{routing_decision.reason_message} (fallback used: {fallback_used})"
+            if fallback_used
+            else routing_decision.reason_message,
             feature_summary=routing_decision.feature_summary,
             fallback_used=fallback_used,
             complexity=routing_decision.complexity,

@@ -21,10 +21,10 @@ class ExecutionState(str, Enum):
 
 
 class ExecutionMode(str, Enum):
-    DIRECT = "direct"                  # Single-model inference for routine/simple tasks
-    MULTI_STEP = "multi_step"          # Sequential sub-task decomposition
-    COLLABORATIVE = "collaborative"    # Multi-model team execution (Worker, Critic, Verifier)
-    TOOL_ASSISTED = "tool_assisted"    # Execution augmented with tool calls
+    DIRECT = "direct"  # Single-model inference for routine/simple tasks
+    MULTI_STEP = "multi_step"  # Sequential sub-task decomposition
+    COLLABORATIVE = "collaborative"  # Multi-model team execution (Worker, Critic, Verifier)
+    TOOL_ASSISTED = "tool_assisted"  # Execution augmented with tool calls
 
 
 @dataclass
@@ -259,4 +259,3 @@ class AgenticTaskPlanner:
 
 
 default_agentic_planner = AgenticTaskPlanner()
-

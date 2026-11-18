@@ -13,11 +13,7 @@ def generate_markdown_report(results: BenchmarkRunResults) -> str:
 
     strong_cost = strong.total_cost if strong else 1.0
     adaptive_cost = adaptive.total_cost if adaptive else 0.0
-    savings_pct = (
-        round(((strong_cost - adaptive_cost) / strong_cost) * 100, 1)
-        if strong_cost > 0
-        else 0.0
-    )
+    savings_pct = round(((strong_cost - adaptive_cost) / strong_cost) * 100, 1) if strong_cost > 0 else 0.0
 
     md = []
     md.append("# Benchmark Evaluation Report")
@@ -28,7 +24,9 @@ def generate_markdown_report(results: BenchmarkRunResults) -> str:
     md.append("")
     md.append("## 1. Executive Summary Table")
     md.append("")
-    md.append("| Policy | Pass Rate | Mean Score | Total Cost ($) | Avg Cost/Task ($) | Mean Latency (ms) | Fallbacks |")
+    md.append(
+        "| Policy | Pass Rate | Mean Score | Total Cost ($) | Avg Cost/Task ($) | Mean Latency (ms) | Fallbacks |"
+    )
     md.append("|---|---|---|---|---|---|---|")
 
     for pol_name in ["always_cheap", "always_strong", "adaptive"]:

@@ -40,6 +40,7 @@ async def create_chat_completion(
     if not request.user or not user.is_admin:
         request.user = user.user_id
     if request.stream:
+
         async def event_generator():
             completion = await orchestrator.execute_chat(request, client_request_id=x_request_id)
             content = completion.choices[0].message.content if completion.choices else ""
@@ -87,4 +88,3 @@ async def create_chat_completion(
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     return await orchestrator.execute_chat(request, client_request_id=x_request_id)
-

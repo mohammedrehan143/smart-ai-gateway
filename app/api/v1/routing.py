@@ -58,4 +58,3 @@ async def reset_bandit_statistics() -> Dict[str, Any]:
     """Resets all contextual bandit learning state back to baseline priors."""
     default_bandit_router.reset()
     return {"status": "reset", "message": "Bandit statistics reset to default priors."}
-

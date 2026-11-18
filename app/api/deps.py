@@ -20,6 +20,7 @@ _orchestrator_instance: Optional[ChatOrchestrator] = None
 @dataclass
 class AuthenticatedUser:
     """Authenticated identity derived from verified token."""
+
     user_id: str
     is_admin: bool = False
     tenant_id: str = "default"
@@ -149,12 +150,27 @@ async def get_authenticated_user(
                         }
                     },
                 )
-            return AuthenticatedUser(
+            auth_user = AuthenticatedUser(
                 user_id=mapped_user,
                 is_admin=False,
                 tenant_id=mapped_user,
                 token_identifier=f"tenant_{mapped_user}",
             )
+            # Check tenant rate limit
+            is_allowed, retry_after = default_rate_limiter.check_tenant_rate_limit(auth_user.tenant_id)
+            if not is_allowed:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    headers={"Retry-After": str(retry_after)},
+                    detail={
+                        "error": {
+                            "type": "rate_limited",
+                            "message": f"Tenant '{auth_user.tenant_id}' rate limit exceeded. Retry in {retry_after}s.",
+                            "retryable": True,
+                        }
+                    },
+                )
+            return auth_user
 
     # 6. Check against master GATEWAY_API_KEY
     is_master_match = False
@@ -184,12 +200,26 @@ async def get_authenticated_user(
     # Token is valid master/allowed admin key
     default_rate_limiter.reset_failed_auth(client_ip)
     effective_user = x_user_id or "default_user"
-    return AuthenticatedUser(
+    auth_user = AuthenticatedUser(
         user_id=effective_user,
         is_admin=True,
         tenant_id=effective_user,
         token_identifier="master_key",
     )
+    is_allowed, retry_after = default_rate_limiter.check_tenant_rate_limit(auth_user.tenant_id)
+    if not is_allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            headers={"Retry-After": str(retry_after)},
+            detail={
+                "error": {
+                    "type": "rate_limited",
+                    "message": f"Tenant '{auth_user.tenant_id}' rate limit exceeded. Retry in {retry_after}s.",
+                    "retryable": True,
+                }
+            },
+        )
+    return auth_user
 
 
 async def verify_gateway_auth(

@@ -352,9 +352,7 @@ class SqliteTraceRepository(BaseTraceRepository):
 
     async def get_request_by_trace_id(self, trace_id: str) -> Optional[GatewayRequestRecord]:
         async with self._get_conn() as conn:
-            cursor = await conn.execute(
-                "SELECT * FROM gateway_requests WHERE trace_id = ?", (trace_id,)
-            )
+            cursor = await conn.execute("SELECT * FROM gateway_requests WHERE trace_id = ?", (trace_id,))
             row = await cursor.fetchone()
             if not row:
                 return None
@@ -654,26 +652,27 @@ class SqliteTraceRepository(BaseTraceRepository):
                 except Exception:
                     features = {}
 
-                decisions.append({
-                    "decision_id": row["decision_id"],
-                    "trace_id": row["trace_id"],
-                    "policy": row["policy_name"],
-                    "policy_version": row["policy_version"],
-                    "selected_provider": row["selected_provider"],
-                    "selected_model": row["selected_model_alias"],
-                    "tier": row["tier"],
-                    "reason_code": row["reason_code"],
-                    "reason": row["reason_message"],
-                    "features": features,
-                    "complexity": features.get("complexity", "SIMPLE"),
-                    "strategy": features.get("strategy", "balanced"),
-                    "alternative_eligible_models": features.get("alternative_eligible_models", []),
-                    "fallback_reason": features.get("fallback_reason"),
-                    "latency_ms": row["latency_ms"] or 0,
-                    "total_tokens": row["total_tokens"] or 0,
-                    "cost_estimate": row["estimated_cost"],
-                    "fallback_used": bool(row["fallback_used"]),
-                    "created_at": row["created_at"],
-                })
+                decisions.append(
+                    {
+                        "decision_id": row["decision_id"],
+                        "trace_id": row["trace_id"],
+                        "policy": row["policy_name"],
+                        "policy_version": row["policy_version"],
+                        "selected_provider": row["selected_provider"],
+                        "selected_model": row["selected_model_alias"],
+                        "tier": row["tier"],
+                        "reason_code": row["reason_code"],
+                        "reason": row["reason_message"],
+                        "features": features,
+                        "complexity": features.get("complexity", "SIMPLE"),
+                        "strategy": features.get("strategy", "balanced"),
+                        "alternative_eligible_models": features.get("alternative_eligible_models", []),
+                        "fallback_reason": features.get("fallback_reason"),
+                        "latency_ms": row["latency_ms"] or 0,
+                        "total_tokens": row["total_tokens"] or 0,
+                        "cost_estimate": row["estimated_cost"],
+                        "fallback_used": bool(row["fallback_used"]),
+                        "created_at": row["created_at"],
+                    }
+                )
             return decisions
-

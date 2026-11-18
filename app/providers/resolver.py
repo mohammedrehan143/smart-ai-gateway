@@ -20,12 +20,14 @@ def is_mock_mode_explicitly_enabled() -> bool:
     """Determines whether mock execution mode is explicitly enabled (test suite or explicit flag)."""
     import os
     import sys
+
     if os.environ.get("APP_ENV") == "test" or "pytest" in sys.modules:
         return True
     if os.environ.get("ENABLE_MOCK_GATEWAY", "").lower() in ("true", "1", "yes"):
         return True
     try:
         from app.core.config import settings
+
         if getattr(settings, "ENABLE_MOCK_GATEWAY", False):
             return True
     except Exception:
@@ -83,7 +85,7 @@ class RealAgentAdapter(BaseProviderAdapter):
             finish_reason="stop",
             provider=self._provider,
             model_alias=self._model_id,
-            provider_request_id=f"real_{int(time.time()*1000)}",
+            provider_request_id=f"real_{int(time.time() * 1000)}",
             input_tokens=resp.prompt_tokens,
             output_tokens=resp.completion_tokens,
             total_tokens=resp.total_tokens,
@@ -143,7 +145,14 @@ class DynamicProviderAdapter(BaseProviderAdapter):
                     base_url=user_base_url,
                 )
 
-        # 3. Environment variables (Only when user has not provided their own keys)
+        # 3. Environment variables (Only in development/local mode, or system admin)
+        # In production mode, tenant requests must NEVER silently fall back to shared server credentials!
+        if settings.APP_ENV == "production" and user_id and user_id not in ("admin", "default_user"):
+            raise ProviderAuthError(
+                f"No BYOK credential configured for tenant '{user_id}' on provider '{provider_name}'. "
+                f"Please register your API key at POST /v1/credentials before sending inference requests."
+            )
+
         groq_env_key = os.environ.get("GROQ_API_KEY")
         if _is_real_key(groq_env_key) and (tier == "cheap" or not os.environ.get("OPENAI_API_KEY")):
             return RealAgentAdapter(

@@ -60,8 +60,10 @@ class DeterministicRouter:
         # Check if weak/strong agent models are configured in CredentialManager (only when not in test/mock mode and not explicitly overridden)
         try:
             from app.providers.resolver import is_mock_mode_explicitly_enabled
+
             if not is_mock_mode_explicitly_enabled() and not cheap_alias and not strong_alias:
                 from agents.credential_manager import default_credential_manager
+
                 effective_user = options.user_id or "default_user"
                 weak_cfg = default_credential_manager.get_agent_config(effective_user, "weak")
                 if weak_cfg and weak_cfg.is_enabled and weak_cfg.model_id:
@@ -104,7 +106,9 @@ class DeterministicRouter:
                 complexity=complexity,
                 strategy=strategy,
                 task_category=profile.category.value,
-                alternative_eligible_models=[m.alias for m in self.registry.get_by_tier("cheap") if m.alias != cheap_default],
+                alternative_eligible_models=[
+                    m.alias for m in self.registry.get_by_tier("cheap") if m.alias != cheap_default
+                ],
                 estimated_cost=self._estimate_cost(cheap_default, features.estimated_tokens),
                 candidate_progression=[cheap_default, strong_default],
                 classification_level=1,
@@ -127,7 +131,9 @@ class DeterministicRouter:
                 complexity=complexity,
                 strategy=strategy,
                 task_category=profile.category.value,
-                alternative_eligible_models=[m.alias for m in self.registry.get_by_tier("strong") if m.alias != strong_default],
+                alternative_eligible_models=[
+                    m.alias for m in self.registry.get_by_tier("strong") if m.alias != strong_default
+                ],
                 estimated_cost=self._estimate_cost(strong_default, features.estimated_tokens),
                 candidate_progression=[strong_default, cheap_default],
                 classification_level=3,
@@ -150,7 +156,9 @@ class DeterministicRouter:
                     complexity=complexity,
                     strategy=strategy,
                     task_category=profile.category.value,
-                    alternative_eligible_models=[m.alias for m in self.registry.list_models() if m.alias != manual_meta.alias],
+                    alternative_eligible_models=[
+                        m.alias for m in self.registry.list_models() if m.alias != manual_meta.alias
+                    ],
                     estimated_cost=self._estimate_cost(manual_meta.alias, features.estimated_tokens),
                     candidate_progression=[manual_meta.alias, strong_default],
                     classification_level=1 if manual_meta.tier == "cheap" else 3,
@@ -176,7 +184,9 @@ class DeterministicRouter:
                 complexity=complexity,
                 strategy=strategy,
                 task_category=profile.category.value,
-                alternative_eligible_models=[m.alias for m in self.registry.get_by_tier("strong") if m.alias != strong_default],
+                alternative_eligible_models=[
+                    m.alias for m in self.registry.get_by_tier("strong") if m.alias != strong_default
+                ],
                 estimated_cost=self._estimate_cost(strong_default, features.estimated_tokens),
                 candidate_progression=[strong_default],
                 classification_level=3,
@@ -256,7 +266,9 @@ class DeterministicRouter:
                     key=lambda m: (m.quality_score, 1 if m.alias == strong_default else 0),
                 )
                 reason_code = "MODERATE_QUALITY_FIRST"
-                reason_message = "Moderate complexity request; selected high-capability model under quality-first policy."
+                reason_message = (
+                    "Moderate complexity request; selected high-capability model under quality-first policy."
+                )
             else:
                 cost_effective = [m for m in candidates_to_score if m.tier == "cheap" and m.quality_tier >= 2]
                 candidates = cost_effective if cost_effective else candidates_to_score
@@ -315,10 +327,14 @@ class DeterministicRouter:
 
             if features.has_code or features.is_debugging:
                 reason_code = "CODE_OR_DEBUGGING_DETECTED"
-                reason_message = "Request contains source code or debugging diagnostics requiring advanced capabilities."
+                reason_message = (
+                    "Request contains source code or debugging diagnostics requiring advanced capabilities."
+                )
             else:
                 reason_code = "COMPLEX_REASONING_OR_MULTISTEP"
-                reason_message = "Request indicates system architecture, multi-step execution, or comparative trade-off analysis."
+                reason_message = (
+                    "Request indicates system architecture, multi-step execution, or comparative trade-off analysis."
+                )
 
         else:
             # EXPERT: High-stakes technical reasoning, multi-agent security, formal proofs
@@ -355,7 +371,9 @@ class DeterministicRouter:
         # -------------------------------------------------------------
         # 8. Fallback Candidate Progression
         # -------------------------------------------------------------
-        same_tier_alts = [m.alias for m in candidates_to_score if m.tier == selected_model.tier and m.alias != selected_model.alias]
+        same_tier_alts = [
+            m.alias for m in candidates_to_score if m.tier == selected_model.tier and m.alias != selected_model.alias
+        ]
         other_tier_alts = [m.alias for m in candidates_to_score if m.tier != selected_model.tier]
 
         candidate_progression = [selected_model.alias] + same_tier_alts + other_tier_alts

@@ -132,11 +132,9 @@ class ExecutionEngine:
                 break
             except Exception as exc:
                 execution_error = exc
-                logger.warning(
-                    f"Agent execution attempt {attempt + 1} failed for {chosen_agent_type}: {exc}"
-                )
+                logger.warning(f"Agent execution attempt {attempt + 1} failed for {chosen_agent_type}: {exc}")
                 if attempt < max_retries:
-                    await asyncio.sleep(0.5 * (2 ** attempt))
+                    await asyncio.sleep(0.5 * (2**attempt))
 
         # 3. Fallback to alternate agent if primary failed
         if result is None:
@@ -408,7 +406,9 @@ class ExecutionEngine:
             hypothetical_strong_cost += (in_tok * (2.50 / 1_000_000.0)) + (out_tok * (10.00 / 1_000_000.0))
 
         savings_usd = max(0.0, hypothetical_strong_cost - total_cost)
-        savings_pct = round((savings_usd / hypothetical_strong_cost * 100.0), 1) if hypothetical_strong_cost > 0 else 0.0
+        savings_pct = (
+            round((savings_usd / hypothetical_strong_cost * 100.0), 1) if hypothetical_strong_cost > 0 else 0.0
+        )
 
         return {
             "total_requests": total,

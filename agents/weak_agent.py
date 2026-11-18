@@ -32,7 +32,7 @@ class WeakAgent:
     """Agent specialized for simple, high-velocity, cost-effective prompt executions."""
 
     AGENT_TYPE = "weak"
-    DEFAULT_INPUT_RATE = 0.15   # $0.15 / 1M tokens
+    DEFAULT_INPUT_RATE = 0.15  # $0.15 / 1M tokens
     DEFAULT_OUTPUT_RATE = 0.60  # $0.60 / 1M tokens
 
     def __init__(
@@ -62,7 +62,9 @@ class WeakAgent:
         calc = default_cost_calculator.calculate(model_id, prompt_tokens, completion_tokens)
         if calc and calc.estimated_cost is not None:
             return calc.estimated_cost
-        return (prompt_tokens * (self.DEFAULT_INPUT_RATE / 1_000_000.0)) + (completion_tokens * (self.DEFAULT_OUTPUT_RATE / 1_000_000.0))
+        return (prompt_tokens * (self.DEFAULT_INPUT_RATE / 1_000_000.0)) + (
+            completion_tokens * (self.DEFAULT_OUTPUT_RATE / 1_000_000.0)
+        )
 
     async def execute(
         self,

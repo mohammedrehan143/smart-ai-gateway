@@ -85,15 +85,10 @@ class ContextualBanditRouter:
             fallback = next((m for m in eligible_models if m.alias == deterministic_fallback_alias), eligible_models[0])
             return fallback, "DETERMINISTIC_BASELINE", 0.70
 
-        total_cat_trials = sum(
-            self.get_arm(category, m.alias).trials for m in eligible_models
-        )
+        total_cat_trials = sum(self.get_arm(category, m.alias).trials for m in eligible_models)
 
         # 1. Minimum Sample Guarantee: Explore any eligible model with trials < min_sample_threshold
-        unexplored = [
-            m for m in eligible_models
-            if self.get_arm(category, m.alias).trials < self.min_sample_threshold
-        ]
+        unexplored = [m for m in eligible_models if self.get_arm(category, m.alias).trials < self.min_sample_threshold]
         if unexplored:
             chosen = random.choice(unexplored)
             arm = self.get_arm(category, chosen.alias)
@@ -118,7 +113,11 @@ class ContextualBanditRouter:
 
         selected = best_model or eligible_models[0]
         arm = self.get_arm(category, selected.alias)
-        return selected, f"BANDIT_UCB_EXPLOITATION (avg_reward={arm.avg_reward:.3f}, trials={arm.trials})", arm.avg_reward
+        return (
+            selected,
+            f"BANDIT_UCB_EXPLOITATION (avg_reward={arm.avg_reward:.3f}, trials={arm.trials})",
+            arm.avg_reward,
+        )
 
     def compute_reward(
         self,
@@ -174,7 +173,9 @@ class ContextualBanditRouter:
         decayed_reward = arm.total_reward * self.decay_factor
 
         arm.trials = round(decayed_trials) + 1
-        arm.successes = (round(arm.successes * self.decay_factor) + 1) if success else round(arm.successes * self.decay_factor)
+        arm.successes = (
+            (round(arm.successes * self.decay_factor) + 1) if success else round(arm.successes * self.decay_factor)
+        )
         arm.total_reward = decayed_reward + reward
         arm.avg_reward = arm.total_reward / arm.trials
 

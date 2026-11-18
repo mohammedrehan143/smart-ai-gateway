@@ -16,6 +16,7 @@ from app.main import app
 # 1. Authentication Security Tests
 # ---------------------------------------------------------------------------
 
+
 def test_production_fails_without_required_secrets():
     """Verify that production startup strictly rejects missing or weak credentials."""
     # Missing GATEWAY_API_KEY
@@ -57,6 +58,7 @@ def test_production_fails_without_required_secrets():
 async def test_auth_enforcement_when_configured():
     """Verify that when GATEWAY_API_KEY is configured, unauthenticated requests are rejected."""
     from app.core.config import settings
+
     orig_env = settings.APP_ENV
     orig_key = settings.GATEWAY_API_KEY
     try:
@@ -87,6 +89,7 @@ async def test_auth_enforcement_when_configured():
 async def test_token_revocation_enforcement():
     """Verify that revoked tokens in REVOKED_API_KEYS are immediately denied access."""
     from app.core.config import settings
+
     orig_env = settings.APP_ENV
     orig_key = settings.GATEWAY_API_KEY
     orig_revoked = settings.REVOKED_API_KEYS
@@ -110,6 +113,7 @@ async def test_token_revocation_enforcement():
 # ---------------------------------------------------------------------------
 # 2. Multi-Tenant Credential Isolation Tests
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_cross_tenant_credential_isolation(async_client: AsyncClient):
@@ -159,6 +163,7 @@ async def test_cross_tenant_cache_isolation():
 # 3. SSRF (Server-Side Request Forgery) Protection Tests
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "forbidden_url",
     [
@@ -195,6 +200,7 @@ def test_ssrf_validator_permits_legitimate_endpoints():
 # 4. Credential Encryption and Key Rotation Tests
 # ---------------------------------------------------------------------------
 
+
 def test_credential_encryption_and_key_rotation():
     """Verify that credentials encrypt, decrypt, and rotate to new keys seamlessly."""
     raw_key = "sk-proj-super-secret-user-api-key-test-value-12345"
@@ -221,3 +227,56 @@ def test_secret_masking_never_exposes_plaintext():
     masked = mask_secret(key)
     assert masked == "gsk...wxyz"
     assert "1234567890abcdef" not in masked
+
+
+# ---------------------------------------------------------------------------
+# 5. Tenant Impersonation & Production BYOK Isolation Tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_tenant_impersonation_strictly_forbidden(async_client: AsyncClient):
+    """Verify that a tenant token cannot claim to be another user via X-User-ID."""
+    from app.core.config import settings
+
+    orig_env = settings.APP_ENV
+    orig_key = settings.GATEWAY_API_KEY
+    orig_tenants = settings.TENANT_API_KEYS
+    try:
+        settings.APP_ENV = "staging"
+        settings.GATEWAY_API_KEY = "master-admin-key-123456789"
+        settings.TENANT_API_KEYS = '{"tenant-token-alice-secret-123": "alice"}'
+
+        # Alice attempts to impersonate Bob
+        resp = await async_client.get(
+            "/v1/auth/verify",
+            headers={
+                "Authorization": "Bearer tenant-token-alice-secret-123",
+                "X-User-ID": "bob",
+            },
+        )
+        assert resp.status_code == 403
+        assert "Tenant mismatch" in resp.json()["error"]["message"]
+    finally:
+        settings.APP_ENV = orig_env
+        settings.GATEWAY_API_KEY = orig_key
+        settings.TENANT_API_KEYS = orig_tenants
+
+
+@pytest.mark.asyncio
+async def test_production_tenant_without_byok_cannot_use_shared_host_keys(async_client: AsyncClient):
+    """Verify that in production mode, a tenant without configured BYOK keys cannot piggyback on server keys."""
+    from app.core.config import settings
+    from app.providers.resolver import DynamicProviderAdapter
+    from app.core.errors import ProviderAuthError
+
+    orig_env = settings.APP_ENV
+    orig_key = settings.GATEWAY_API_KEY
+    try:
+        settings.APP_ENV = "production"
+        adapter = DynamicProviderAdapter()
+        with pytest.raises(ProviderAuthError, match="No BYOK credential configured for tenant"):
+            adapter._resolve_adapter("llama-3.1-8b-instant", user_id="tenant_charlie")
+    finally:
+        settings.APP_ENV = orig_env
+        settings.GATEWAY_API_KEY = orig_key

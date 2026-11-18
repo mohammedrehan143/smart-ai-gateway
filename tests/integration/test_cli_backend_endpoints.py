@@ -61,7 +61,11 @@ async def test_routing_decisions_inspection(async_client: AsyncClient):
     # Perform a request first to generate a routing decision
     await async_client.post(
         "/v1/chat",
-        json={"messages": [{"role": "user", "content": "Explain quicksort in Python:\n\n```python\ndef quicksort(): pass\n```"}]},
+        json={
+            "messages": [
+                {"role": "user", "content": "Explain quicksort in Python:\n\n```python\ndef quicksort(): pass\n```"}
+            ]
+        },
     )
 
     resp = await async_client.get("/v1/routing/decisions?limit=10")
@@ -73,7 +77,6 @@ async def test_routing_decisions_inspection(async_client: AsyncClient):
     assert "trace_id" in first_dec
     assert "tier" in first_dec
     assert "reason" in first_dec
-
 
 
 @pytest.mark.asyncio

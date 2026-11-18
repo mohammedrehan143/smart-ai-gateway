@@ -63,4 +63,3 @@ async def test_chat_completions_alias_success(async_client: AsyncClient):
     assert resp.status_code == 200
     data = resp.json()
     assert data["object"] == "gateway.completion"
-

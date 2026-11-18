@@ -20,10 +20,10 @@ def sanitize_llm_response(text: str) -> str:
 
     # 2. Remove policy reasoning leakage e.g. 'The user asks "..." ... According to policy ... Provide name.'
     policy_patterns = [
-        r'The user asks[\s\S]*?Provide name[\.\?!]?',
-        r'The user asks[\s\S]*?According to policy[\s\S]*?Provide name[\.\?!]?',
-        r'According to policy,[\s\S]*?Provide name[\.\?!]?',
-        r'The assistant is ChatGPT[\.\?!]?',
+        r"The user asks[\s\S]*?Provide name[\.\?!]?",
+        r"The user asks[\s\S]*?According to policy[\s\S]*?Provide name[\.\?!]?",
+        r"According to policy,[\s\S]*?Provide name[\.\?!]?",
+        r"The assistant is ChatGPT[\.\?!]?",
     ]
     for pat in policy_patterns:
         cleaned = re.sub(pat, "", cleaned, flags=re.IGNORECASE).strip()

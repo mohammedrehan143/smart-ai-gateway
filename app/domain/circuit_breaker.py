@@ -9,16 +9,16 @@ from typing import Any, Dict, Optional
 
 
 class CircuitState(str, Enum):
-    CLOSED = "CLOSED"        # Normal execution; upstream is healthy
-    OPEN = "OPEN"            # Tripped; traffic immediately blocked to prevent cascade
+    CLOSED = "CLOSED"  # Normal execution; upstream is healthy
+    OPEN = "OPEN"  # Tripped; traffic immediately blocked to prevent cascade
     HALF_OPEN = "HALF_OPEN"  # Testing recovery with bounded test request
 
 
 @dataclass
 class CircuitBreakerConfig:
-    failure_threshold: int = 3       # Trip to OPEN after 3 consecutive failures
-    cooldown_seconds: float = 30.0   # Wait 30s before trying HALF_OPEN recovery
-    half_open_trials: int = 1        # Number of successes needed to close circuit
+    failure_threshold: int = 3  # Trip to OPEN after 3 consecutive failures
+    cooldown_seconds: float = 30.0  # Wait 30s before trying HALF_OPEN recovery
+    half_open_trials: int = 1  # Number of successes needed to close circuit
 
 
 class CircuitBreaker:

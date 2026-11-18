@@ -29,20 +29,22 @@ async def list_models() -> Dict[str, Any]:
             "rate_card_version": rate_entry.version if rate_entry else "default",
         }
 
-        models_data.append({
-            "id": model.alias,
-            "alias": model.alias,
-            "provider": model.provider,
-            "upstream_model_id": model.upstream_model_id,
-            "tier": model.tier,
-            "context_window": model.context_window,
-            "max_output_tokens": model.max_output_tokens,
-            "supports_tools": model.supports_tools,
-            "supports_json": model.supports_json,
-            "is_active": model.is_active,
-            "version": model.version,
-            "pricing": pricing,
-        })
+        models_data.append(
+            {
+                "id": model.alias,
+                "alias": model.alias,
+                "provider": model.provider,
+                "upstream_model_id": model.upstream_model_id,
+                "tier": model.tier,
+                "context_window": model.context_window,
+                "max_output_tokens": model.max_output_tokens,
+                "supports_tools": model.supports_tools,
+                "supports_json": model.supports_json,
+                "is_active": model.is_active,
+                "version": model.version,
+                "pricing": pricing,
+            }
+        )
 
     return {
         "object": "list",

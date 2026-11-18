@@ -6,9 +6,7 @@ from app.repositories.sqlite import SqliteTraceRepository
 
 
 @pytest.mark.asyncio
-async def test_provider_telemetry_and_cost_provenance(
-    async_client: AsyncClient, test_repo: SqliteTraceRepository
-):
+async def test_provider_telemetry_and_cost_provenance(async_client: AsyncClient, test_repo: SqliteTraceRepository):
     payload = {
         "messages": [
             {"role": "user", "content": "Tell me a short joke about latency."},

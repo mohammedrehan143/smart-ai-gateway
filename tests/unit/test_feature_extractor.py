@@ -5,9 +5,7 @@ from app.domain.features import extract_features
 
 
 def test_extract_code_feature():
-    messages = [
-        ChatMessage(role="user", content="Here is my code:\ndef solve(n):\n    return n * 2")
-    ]
+    messages = [ChatMessage(role="user", content="Here is my code:\ndef solve(n):\n    return n * 2")]
     features = extract_features(messages)
     assert features.has_code is True
     assert features.is_debugging is False
@@ -22,17 +20,13 @@ def test_extract_debugging_feature():
 
 
 def test_extract_multistep_feature():
-    messages = [
-        ChatMessage(role="user", content="Step 1: parse input. Step 2: compute total. Finally format.")
-    ]
+    messages = [ChatMessage(role="user", content="Step 1: parse input. Step 2: compute total. Finally format.")]
     features = extract_features(messages)
     assert features.is_multistep is True
 
 
 def test_extract_simple_routine_feature():
-    messages = [
-        ChatMessage(role="user", content="What is the capital of Japan?")
-    ]
+    messages = [ChatMessage(role="user", content="What is the capital of Japan?")]
     features = extract_features(messages)
     assert features.has_code is False
     assert features.is_debugging is False

@@ -14,7 +14,9 @@ router = APIRouter(prefix="/v1/budgets", tags=["Budgets"])
 
 class BudgetUpdateRequest(BaseModel):
     project_id: str = Field(default="default_project", description="Project or workspace identifier")
-    max_cost_per_request: Optional[float] = Field(None, ge=0.0, description="Maximum allowed cost per single request ($)")
+    max_cost_per_request: Optional[float] = Field(
+        None, ge=0.0, description="Maximum allowed cost per single request ($)"
+    )
     daily_budget: Optional[float] = Field(None, ge=0.0, description="Daily spend cap in USD")
     monthly_budget: Optional[float] = Field(None, ge=0.0, description="Monthly spend cap in USD")
 

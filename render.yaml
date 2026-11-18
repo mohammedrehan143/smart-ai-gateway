@@ -22,5 +22,11 @@ services:
         value: mock-strong
       - key: GATEWAY_API_KEY
         generateValue: true
+      - key: ENCRYPTION_MASTER_KEY
+        generateValue: true
+      - key: ALLOWED_CORS_ORIGINS
+        value: '["https://smart-ai-gateway.onrender.com"]'
+      - key: ENABLE_MOCK_GATEWAY
+        value: "false"
       - key: PROVIDER_API_KEY
         sync: false

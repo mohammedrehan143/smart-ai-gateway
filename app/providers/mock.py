@@ -62,7 +62,7 @@ class MockProviderAdapter(BaseProviderAdapter):
                 {
                     "id": f"call_{uuid.uuid4().hex[:8]}",
                     "type": "function",
-                    "function": {"name": "calculator", "arguments": "{\"expression\": \"2 + 2\"}"},
+                    "function": {"name": "calculator", "arguments": '{"expression": "2 + 2"}'},
                 }
             ]
             content = ""
@@ -82,7 +82,17 @@ class MockProviderAdapter(BaseProviderAdapter):
                 )
             elif any(w in lower_msg for w in ("reply", "reply?", "are you there")):
                 content = "Mock completion response: I am here and ready to help! What question, coding problem, or system architecture would you like to discuss?"
-            elif any(w in lower_msg for w in ("what all task", "task can the smart ai gateway", "feature", "capabilities", "what can you do", "help")):
+            elif any(
+                w in lower_msg
+                for w in (
+                    "what all task",
+                    "task can the smart ai gateway",
+                    "feature",
+                    "capabilities",
+                    "what can you do",
+                    "help",
+                )
+            ):
                 content = (
                     "Mock completion response: Below is a high-level overview of tasks the **Smart AI Gateway** performs:\n\n"
                     "1. **Intelligent Dual-Agent Routing**: Automatically classifies task complexity in real time and routes to the Weak Agent (fast, cost-effective) or Strong Agent (deep reasoning, architecture, debugging).\n"

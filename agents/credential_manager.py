@@ -12,6 +12,7 @@ from app.core.crypto import decrypt_secret, encrypt_secret, mask_secret
 @dataclass
 class AgentConfig:
     """Configuration and credentials for an individual agent (weak or strong)."""
+
     user_id: str
     agent_type: Literal["weak", "strong"]
     provider: str  # "openai", "groq", "google", "anthropic", "openai_compatible"
@@ -74,6 +75,7 @@ class CredentialManager:
         try:
             import sqlite3
             from pathlib import Path
+
             p = Path(self._db_path)
             if p.parent and str(p.parent) != ".":
                 p.parent.mkdir(parents=True, exist_ok=True)
@@ -147,6 +149,7 @@ class CredentialManager:
         """Encrypts and stores agent configuration in-memory and persistently in SQLite with SSRF protection."""
         if base_url:
             from app.core.network_security import validate_provider_base_url
+
             base_url = validate_provider_base_url(base_url)
 
         now = time.time()

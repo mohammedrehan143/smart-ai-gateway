@@ -55,33 +55,37 @@ class MetricsCollector:
         for (policy, model, status), count in self.request_counts.items():
             lines.append(f'gateway_requests_total{{policy="{policy}",model="{model}",status="{status}"}} {count}')
 
-        lines.extend([
-            "# HELP gateway_tokens_total Total tokens processed",
-            "# TYPE gateway_tokens_total counter",
-            f'gateway_tokens_total{{type="input"}} {self.total_input_tokens}',
-            f'gateway_tokens_total{{type="output"}} {self.total_output_tokens}',
-            "# HELP gateway_estimated_cost_usd Cumulative estimated spend in USD",
-            "# TYPE gateway_estimated_cost_usd counter",
-            f"gateway_estimated_cost_usd {self.total_estimated_cost_usd:.6f}",
-            "# HELP gateway_cache_events_total Cache hit and miss events",
-            "# TYPE gateway_cache_events_total counter",
-            f'gateway_cache_events_total{{type="hit"}} {self.cache_hits}',
-            f'gateway_cache_events_total{{type="miss"}} {self.cache_misses}',
-            "# HELP gateway_fallbacks_total Total number of fallback model triggers",
-            "# TYPE gateway_fallbacks_total counter",
-            f"gateway_fallbacks_total {self.fallback_count}",
-        ])
+        lines.extend(
+            [
+                "# HELP gateway_tokens_total Total tokens processed",
+                "# TYPE gateway_tokens_total counter",
+                f'gateway_tokens_total{{type="input"}} {self.total_input_tokens}',
+                f'gateway_tokens_total{{type="output"}} {self.total_output_tokens}',
+                "# HELP gateway_estimated_cost_usd Cumulative estimated spend in USD",
+                "# TYPE gateway_estimated_cost_usd counter",
+                f"gateway_estimated_cost_usd {self.total_estimated_cost_usd:.6f}",
+                "# HELP gateway_cache_events_total Cache hit and miss events",
+                "# TYPE gateway_cache_events_total counter",
+                f'gateway_cache_events_total{{type="hit"}} {self.cache_hits}',
+                f'gateway_cache_events_total{{type="miss"}} {self.cache_misses}',
+                "# HELP gateway_fallbacks_total Total number of fallback model triggers",
+                "# TYPE gateway_fallbacks_total counter",
+                f"gateway_fallbacks_total {self.fallback_count}",
+            ]
+        )
 
         if self.latencies_ms:
             sorted_lat = sorted(self.latencies_ms)
             p50 = sorted_lat[int(len(sorted_lat) * 0.50)]
             p95 = sorted_lat[int(len(sorted_lat) * 0.95)]
-            lines.extend([
-                "# HELP gateway_latency_ms Summary percentiles for request latency",
-                "# TYPE gateway_latency_ms gauge",
-                f'gateway_latency_ms{{quantile="0.50"}} {p50}',
-                f'gateway_latency_ms{{quantile="0.95"}} {p95}',
-            ])
+            lines.extend(
+                [
+                    "# HELP gateway_latency_ms Summary percentiles for request latency",
+                    "# TYPE gateway_latency_ms gauge",
+                    f'gateway_latency_ms{{quantile="0.50"}} {p50}',
+                    f'gateway_latency_ms{{quantile="0.95"}} {p95}',
+                ]
+            )
 
         return "\n".join(lines) + "\n"
 

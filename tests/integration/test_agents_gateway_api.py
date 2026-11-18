@@ -123,7 +123,10 @@ async def test_gateway_execute_and_telemetry(async_client: AsyncClient, monkeypa
     # 3. Execute Complex Prompt via Adaptive Mode
     res2 = await async_client.post(
         "/api/gateway/execute",
-        json={"prompt": "Design a scalable distributed banking architecture with two-phase commit.", "mode": "adaptive"},
+        json={
+            "prompt": "Design a scalable distributed banking architecture with two-phase commit.",
+            "mode": "adaptive",
+        },
         headers=headers,
     )
     assert res2.status_code == 200

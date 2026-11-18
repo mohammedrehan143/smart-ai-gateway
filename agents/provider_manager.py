@@ -199,7 +199,9 @@ class ProviderManager:
                     raise exc
 
                 retry_after_s = getattr(exc, "retry_after_s", None)
-                backoff_delay = calculate_backoff(attempt, retry_after_s=retry_s if (retry_s := retry_after_s) else None)
+                backoff_delay = calculate_backoff(
+                    attempt, retry_after_s=retry_s if (retry_s := retry_after_s) else None
+                )
                 logger.warning(
                     f"Provider execution attempt {attempt} for {p}:{model_id} failed ({exc}). Retrying in {backoff_delay:.2f}s..."
                 )
@@ -271,7 +273,9 @@ class ProviderManager:
         client = self._get_http_client(timeout)
         try:
             response = await client.post(url, json=payload, headers=headers)
-            if response.status_code == 400 and ("max_completion_tokens" in response.text or "max_tokens" in response.text):
+            if response.status_code == 400 and (
+                "max_completion_tokens" in response.text or "max_tokens" in response.text
+            ):
                 if "max_tokens" in payload:
                     payload.pop("max_tokens", None)
                     payload["max_completion_tokens"] = max_tokens
@@ -433,7 +437,9 @@ class ProviderManager:
                             choices = chunk.get("choices", [])
                             if choices:
                                 delta = choices[0].get("delta", {})
-                                if not delta.get("content") and (delta.get("reasoning") or delta.get("reasoning_content")):
+                                if not delta.get("content") and (
+                                    delta.get("reasoning") or delta.get("reasoning_content")
+                                ):
                                     continue
                             yield chunk
                         except json.JSONDecodeError:

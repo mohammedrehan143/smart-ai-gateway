@@ -98,10 +98,7 @@ class BenchmarkRunner:
             )
 
         n = len(self.dataset.cases)
-        cat_scores = {
-            cat: round(sum(scores) / len(scores), 3)
-            for cat, scores in category_totals.items()
-        }
+        cat_scores = {cat: round(sum(scores) / len(scores), 3) for cat, scores in category_totals.items()}
 
         return PolicySummary(
             policy_name=policy,

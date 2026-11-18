@@ -89,20 +89,31 @@ def test_intent_engine_multi_dimensional_profiling():
     engine = IntentIntelligenceEngine()
 
     # Coding task
-    coding_msgs = [ChatMessage(role="user", content="Write a python function to compute fibonacci numbers with memoization.")]
+    coding_msgs = [
+        ChatMessage(role="user", content="Write a python function to compute fibonacci numbers with memoization.")
+    ]
     coding_profile = engine.analyze(coding_msgs)
     assert coding_profile.category == TaskCategory.CODING
     assert coding_profile.output_format == "code"
-    assert "code_simple" in coding_profile.required_capabilities or "complex_code" in coding_profile.required_capabilities
+    assert (
+        "code_simple" in coding_profile.required_capabilities or "complex_code" in coding_profile.required_capabilities
+    )
 
     # Mathematical task
-    math_msgs = [ChatMessage(role="user", content="Calculate step-by-step the surface integral of vector field F(x, y, z) = (2x, -y, z^2) over the closed boundary of an ellipsoid x^2/a^2 + y^2/b^2 + z^2/c^2 = 1. Prove convergence rigorously using Gauss divergence theorem and detail each integration boundary step across Cartesian and spherical coordinates.")]
+    math_msgs = [
+        ChatMessage(
+            role="user",
+            content="Calculate step-by-step the surface integral of vector field F(x, y, z) = (2x, -y, z^2) over the closed boundary of an ellipsoid x^2/a^2 + y^2/b^2 + z^2/c^2 = 1. Prove convergence rigorously using Gauss divergence theorem and detail each integration boundary step across Cartesian and spherical coordinates.",
+        )
+    ]
     math_profile = engine.analyze(math_msgs)
     assert math_profile.category == TaskCategory.MATHEMATICS
     assert math_profile.complexity in (ComplexityLevel.MODERATE, ComplexityLevel.COMPLEX)
 
     # Deep Architecture Reasoning task
-    arch_msgs = [ChatMessage(role="user", content="Design a scalable distributed banking architecture with Raft consensus.")]
+    arch_msgs = [
+        ChatMessage(role="user", content="Design a scalable distributed banking architecture with Raft consensus.")
+    ]
     arch_profile = engine.analyze(arch_msgs)
     assert arch_profile.category in (TaskCategory.REASONING, TaskCategory.CODING)
     assert arch_profile.complexity in (ComplexityLevel.COMPLEX, ComplexityLevel.EXPERT)
@@ -215,8 +226,17 @@ def test_agentic_task_planner_decision_graph():
     assert len(plan_simple.steps) == 1
 
     # Complex coding -> Collaborative code verification mode
-    code_p = engine.analyze([ChatMessage(role="user", content="Write a Python script to parse complex ELF binary headers.")])
-    plan_code = planner.create_plan(code_p, "mock-cheap", "mock-strong", "mock-cheap", collaboration_requested=True, collaboration_strategy="code_verification")
+    code_p = engine.analyze(
+        [ChatMessage(role="user", content="Write a Python script to parse complex ELF binary headers.")]
+    )
+    plan_code = planner.create_plan(
+        code_p,
+        "mock-cheap",
+        "mock-strong",
+        "mock-cheap",
+        collaboration_requested=True,
+        collaboration_strategy="code_verification",
+    )
     assert plan_code.mode == ExecutionMode.COLLABORATIVE
     assert plan_code.strategy == "code_verification"
     assert len(plan_code.steps) == 2
@@ -231,7 +251,14 @@ async def test_collaboration_engine_peer_review():
 
     deep_prompt = "Analyze this complicated multi-agent security incident: unauthorized lateral movement and token exfiltration detected across AWS IAM roles."
     profile = intent_eng.analyze([ChatMessage(role="user", content=deep_prompt)])
-    plan = planner.create_plan(profile, "mock-cheap", "mock-strong", "mock-cheap", collaboration_requested=True, collaboration_strategy="peer_review")
+    plan = planner.create_plan(
+        profile,
+        "mock-cheap",
+        "mock-strong",
+        "mock-cheap",
+        collaboration_requested=True,
+        collaboration_strategy="peer_review",
+    )
 
     result_resp, executed_steps = await CollaborationExecutionEngine.execute_plan(
         plan=plan,
@@ -366,7 +393,9 @@ async def test_semantic_cache_l1_and_l2_with_safety_invariants():
     assert status == "miss"
 
     # 3. Tenant Isolation: Different tenant cannot access cache
-    other_tenant_resp, status = await cache.get(tenant_id="different_org", model_alias=model, messages=msg1, parameters=params)
+    other_tenant_resp, status = await cache.get(
+        tenant_id="different_org", model_alias=model, messages=msg1, parameters=params
+    )
     assert other_tenant_resp is None
     assert status == "miss"
 

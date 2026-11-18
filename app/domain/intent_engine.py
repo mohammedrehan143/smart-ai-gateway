@@ -110,7 +110,9 @@ class IntentIntelligenceEngine:
 
         # 1. Extract latest user turn as primary signal
         user_msgs = [m for m in messages if m.role == "user"]
-        latest_user_msg = user_msgs[-1].content.strip() if user_msgs else (messages[-1].content.strip() if messages else "")
+        latest_user_msg = (
+            user_msgs[-1].content.strip() if user_msgs else (messages[-1].content.strip() if messages else "")
+        )
         target_text = latest_user_msg
         lower_target = target_text.lower()
 
@@ -161,7 +163,9 @@ class IntentIntelligenceEngine:
             signals.append("multimodal_intent")
 
         # Mathematics detection on latest message
-        elif any(re.search(p, lower_target) for p in MATH_PATTERNS) and not any(k in lower_target for k in ["binary search", "reverse string"]):
+        elif any(re.search(p, lower_target) for p in MATH_PATTERNS) and not any(
+            k in lower_target for k in ["binary search", "reverse string"]
+        ):
             category = TaskCategory.MATHEMATICS
             intent = "mathematical_computation"
             capabilities.update(["math", "deep_reasoning"])
@@ -191,7 +195,19 @@ class IntentIntelligenceEngine:
 
         # Coding detection on latest message
         elif any(k in capabilities for k in ["code_simple", "complex_code", "debugging"]) or any(
-            k in lower_target for k in ["def ", "class ", "function", "write a python", "debug", "refactor", "binary search", "reverse a string", "bug", "traceback"]
+            k in lower_target
+            for k in [
+                "def ",
+                "class ",
+                "function",
+                "write a python",
+                "debug",
+                "refactor",
+                "binary search",
+                "reverse a string",
+                "bug",
+                "traceback",
+            ]
         ):
             category = TaskCategory.CODING
             intent = "code_generation_or_debug"
@@ -210,7 +226,9 @@ class IntentIntelligenceEngine:
         ambiguity = 0.05
         if len(target_text.split()) < 4 and category == TaskCategory.GENERAL_CHAT:
             ambiguity = 0.40
-        elif "?" in target_text and any(k in lower_target for k in ["maybe", "either", "could you clarify", "it depends"]):
+        elif "?" in target_text and any(
+            k in lower_target for k in ["maybe", "either", "could you clarify", "it depends"]
+        ):
             ambiguity = 0.35
 
         # Latency sensitivity
@@ -222,9 +240,13 @@ class IntentIntelligenceEngine:
 
         # Quality expectation
         quality_expectation = quality_threshold or (
-            0.98 if complexity == ComplexityLevel.EXPERT else
-            0.90 if complexity == ComplexityLevel.COMPLEX else
-            0.80 if complexity == ComplexityLevel.MODERATE else 0.70
+            0.98
+            if complexity == ComplexityLevel.EXPERT
+            else 0.90
+            if complexity == ComplexityLevel.COMPLEX
+            else 0.80
+            if complexity == ComplexityLevel.MODERATE
+            else 0.70
         )
 
         char_len = len(full_text)

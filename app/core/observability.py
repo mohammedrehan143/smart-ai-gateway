@@ -76,7 +76,7 @@ class ObservabilityTracer:
         trace_id: Optional[str] = None,
         attributes: Optional[Dict[str, Any]] = None,
     ) -> TraceSpan:
-        t_id = trace_id or f"tr_{int(time.time()*1000):x}_{uuid.uuid4().hex[:12]}"
+        t_id = trace_id or f"tr_{int(time.time() * 1000):x}_{uuid.uuid4().hex[:12]}"
         s_id = f"sp_{uuid.uuid4().hex[:16]}"
         return TraceSpan(
             trace_id=t_id,

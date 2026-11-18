@@ -23,16 +23,33 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
+          pip install build
           pip install -e .
 
       - name: Lint with Ruff
         run: |
-          ruff check app/ tests/
+          ruff check app/ tests/ agents/ smart_ai_cli/
 
-      - name: Run Test Suite
+      - name: Check Code Formatting with Ruff
+        run: |
+          ruff format --check app/ tests/ agents/ smart_ai_cli/
+
+      - name: Run Security Hardening Tests
+        run: |
+          pytest tests/security/ -v --tb=short
+
+      - name: Run Multi-Turn Routing Regression & Dataset Evaluations
+        run: |
+          pytest tests/integration/test_multi_turn_routing_regression.py tests/unit/test_routing_eval_dataset.py -v --tb=short
+
+      - name: Run Complete Test Suite
         run: |
           pytest -v --tb=short
 
       - name: Verify with Master Orchestrator
         run: |
           python scripts/master_orchestrator.py run-all
+
+      - name: Verify Package Build
+        run: |
+          python -m build

@@ -62,7 +62,11 @@ def usage_cmd(
 
         # 3. Recent Requests Table
         if usage.recent_requests:
-            r_table = Table(title=f"Recent Request Activity (Last {len(usage.recent_requests)})", header_style="bold cyan", border_style="dim")
+            r_table = Table(
+                title=f"Recent Request Activity (Last {len(usage.recent_requests)})",
+                header_style="bold cyan",
+                border_style="dim",
+            )
             r_table.add_column("Trace ID", style="dim")
             r_table.add_column("Policy", style="yellow")
             r_table.add_column("Model", style="bold white")

@@ -19,14 +19,48 @@ SAFE_OPERATORS = {
 
 # Deterministic Knowledge Fixture Table for Lookup Tool
 FIXTURE_DATABASE = {
-    "account:101": {"account_id": "101", "name": "Acme Corp", "tier": "enterprise", "monthly_quota": 1000000, "status": "active"},
-    "account:102": {"account_id": "102", "name": "Beta Labs", "tier": "standard", "monthly_quota": 50000, "status": "active"},
-    "account:103": {"account_id": "103", "name": "Gamma Dev", "tier": "starter", "monthly_quota": 10000, "status": "suspended"},
-    "service:gateway": {"service": "gateway", "version": "0.1.0", "port": 8000, "protocol": "HTTP/REST", "maintainer": "core-infra"},
+    "account:101": {
+        "account_id": "101",
+        "name": "Acme Corp",
+        "tier": "enterprise",
+        "monthly_quota": 1000000,
+        "status": "active",
+    },
+    "account:102": {
+        "account_id": "102",
+        "name": "Beta Labs",
+        "tier": "standard",
+        "monthly_quota": 50000,
+        "status": "active",
+    },
+    "account:103": {
+        "account_id": "103",
+        "name": "Gamma Dev",
+        "tier": "starter",
+        "monthly_quota": 10000,
+        "status": "suspended",
+    },
+    "service:gateway": {
+        "service": "gateway",
+        "version": "0.1.0",
+        "port": 8000,
+        "protocol": "HTTP/REST",
+        "maintainer": "core-infra",
+    },
     "pricing:mock-cheap": {"model": "mock-cheap", "input_per_1m": 0.15, "output_per_1m": 0.60, "tier": "cheap"},
     "pricing:mock-strong": {"model": "mock-strong", "input_per_1m": 2.50, "output_per_1m": 10.00, "tier": "strong"},
-    "server:us-east-1": {"datacenter": "us-east-1", "capacity_units": 450, "utilization_pct": 74.2, "status": "operational"},
-    "server:eu-west-1": {"datacenter": "eu-west-1", "capacity_units": 320, "utilization_pct": 88.5, "status": "operational"},
+    "server:us-east-1": {
+        "datacenter": "us-east-1",
+        "capacity_units": 450,
+        "utilization_pct": 74.2,
+        "status": "operational",
+    },
+    "server:eu-west-1": {
+        "datacenter": "eu-west-1",
+        "capacity_units": 320,
+        "utilization_pct": 88.5,
+        "status": "operational",
+    },
 }
 
 

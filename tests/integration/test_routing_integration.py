@@ -6,9 +6,7 @@ from app.repositories.sqlite import SqliteTraceRepository
 
 
 @pytest.mark.asyncio
-async def test_adaptive_routing_routes_code_to_strong(
-    async_client: AsyncClient, test_repo: SqliteTraceRepository
-):
+async def test_adaptive_routing_routes_code_to_strong(async_client: AsyncClient, test_repo: SqliteTraceRepository):
     payload = {
         "messages": [
             {

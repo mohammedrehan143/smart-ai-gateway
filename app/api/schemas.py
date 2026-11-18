@@ -26,9 +26,7 @@ class RoutingSchema(BaseModel):
         "manual",
     ] = "adaptive"
     preference: Optional[str] = "balanced"
-    strategy: Optional[
-        Literal["cost_optimized", "balanced", "quality_first", "performance_optimized", "manual"]
-    ] = None
+    strategy: Optional[Literal["cost_optimized", "balanced", "quality_first", "performance_optimized", "manual"]] = None
     quality_threshold: Optional[float] = None
     manual_model: Optional[str] = None
     enable_collaboration: bool = False
@@ -139,4 +137,3 @@ class HealthResponse(BaseModel):
     gateway_version: str
     database: Optional[str] = None
     environment: str
-

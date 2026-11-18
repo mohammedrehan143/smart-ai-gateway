@@ -22,26 +22,31 @@ from smart_ai_cli.schemas import (
 
 class GatewayClientError(Exception):
     """Base exception for gateway client failures."""
+
     pass
 
 
 class GatewayConnectionError(GatewayClientError):
     """Raised when unable to establish connection to the gateway."""
+
     pass
 
 
 class AuthenticationError(GatewayClientError):
     """Raised on invalid, missing, or expired API credentials (401/403)."""
+
     pass
 
 
 class RateLimitError(GatewayClientError):
     """Raised on HTTP 429 Too Many Requests."""
+
     pass
 
 
 class GatewayServerError(GatewayClientError):
     """Raised on HTTP 5xx Gateway errors."""
+
     pass
 
 

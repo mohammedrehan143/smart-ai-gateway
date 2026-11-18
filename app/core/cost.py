@@ -41,14 +41,9 @@ class CostCalculator:
                 output_rate=None,
             )
 
-        cost = (
-            input_tokens * rate.input_rate_per_million
-            + output_tokens * rate.output_rate_per_million
-        ) / 1_000_000.0
+        cost = (input_tokens * rate.input_rate_per_million + output_tokens * rate.output_rate_per_million) / 1_000_000.0
 
-        status: Literal["calculated", "estimated"] = (
-            "calculated" if is_provider_usage else "estimated"
-        )
+        status: Literal["calculated", "estimated"] = "calculated" if is_provider_usage else "estimated"
 
         return CostCalculationResult(
             estimated_cost=round(cost, 6),

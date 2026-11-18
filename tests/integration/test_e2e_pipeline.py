@@ -6,9 +6,7 @@ from app.repositories.sqlite import SqliteTraceRepository
 
 
 @pytest.mark.asyncio
-async def test_full_gateway_e2e_lifecycle(
-    async_client: AsyncClient, test_repo: SqliteTraceRepository
-):
+async def test_full_gateway_e2e_lifecycle(async_client: AsyncClient, test_repo: SqliteTraceRepository):
     # 1. Health checks
     live_resp = await async_client.get("/health/live")
     assert live_resp.status_code == 200

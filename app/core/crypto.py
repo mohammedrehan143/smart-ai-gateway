@@ -29,9 +29,7 @@ def get_crypto_engine() -> MultiFernet:
     if settings.ENCRYPTION_MASTER_KEY:
         keys.append(_derive_fernet(settings.ENCRYPTION_MASTER_KEY))
     elif settings.APP_ENV == "production":
-        raise RuntimeError(
-            "CRITICAL SECURITY FAILURE: ENCRYPTION_MASTER_KEY must be configured in production mode."
-        )
+        raise RuntimeError("CRITICAL SECURITY FAILURE: ENCRYPTION_MASTER_KEY must be configured in production mode.")
     elif settings.GATEWAY_API_KEY:
         # Dev/local mode fallback to gateway api key if dedicated key not provided
         keys.append(_derive_fernet(settings.GATEWAY_API_KEY))

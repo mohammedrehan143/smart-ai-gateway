@@ -22,7 +22,9 @@ CHAT_INDENT = "    "
 
 @app.command("chat")
 def chat_cmd(
-    policy: Optional[str] = typer.Option(None, "--policy", "-p", help="Routing policy: adaptive, always_cheap, always_strong"),
+    policy: Optional[str] = typer.Option(
+        None, "--policy", "-p", help="Routing policy: adaptive, always_cheap, always_strong"
+    ),
     temperature: Optional[float] = typer.Option(None, "--temperature", "-t", help="Sampling temperature (0.0 to 2.0)"),
     stream: Optional[bool] = typer.Option(None, "--stream/--no-stream", help="Enable or disable token streaming"),
 ) -> None:
@@ -60,9 +62,13 @@ def chat_cmd(
             parts = user_input.split()
             if len(parts) > 1 and parts[1] in ("adaptive", "always_cheap", "always_strong"):
                 active_policy = parts[1]
-                console.print(f"{CHAT_INDENT}[bold green]✔[/bold green] Switched routing policy to: [bold yellow]{active_policy}[/]")
+                console.print(
+                    f"{CHAT_INDENT}[bold green]✔[/bold green] Switched routing policy to: [bold yellow]{active_policy}[/]"
+                )
             else:
-                console.print(f"{CHAT_INDENT}[bold yellow]▲[/bold yellow] Usage: /policy <adaptive | always_cheap | always_strong>")
+                console.print(
+                    f"{CHAT_INDENT}[bold yellow]▲[/bold yellow] Usage: /policy <adaptive | always_cheap | always_strong>"
+                )
             continue
         elif user_input == "/help":
             console.print(
@@ -193,7 +199,9 @@ def chat_cmd(
 @app.command("ask")
 def ask_cmd(
     prompt: str = typer.Argument(..., help="The query or prompt to ask"),
-    policy: Optional[str] = typer.Option(None, "--policy", "-p", help="Routing policy (adaptive, always_cheap, always_strong)"),
+    policy: Optional[str] = typer.Option(
+        None, "--policy", "-p", help="Routing policy (adaptive, always_cheap, always_strong)"
+    ),
     temperature: Optional[float] = typer.Option(None, "--temperature", "-t", help="Sampling temperature"),
     stream: bool = typer.Option(True, "--stream/--no-stream", help="Stream response tokens"),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output raw JSON completion response"),

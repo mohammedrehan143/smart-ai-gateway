@@ -57,4 +57,3 @@ class BaseTraceRepository(ABC):
 
     async def get_recent_requests(self, limit: int = 50, since_timestamp: Optional[float] = None) -> list:
         return []
-

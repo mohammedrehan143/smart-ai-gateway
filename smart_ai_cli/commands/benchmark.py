@@ -17,14 +17,18 @@ app = typer.Typer(help="Execute multi-policy evaluations and benchmark cost savi
 @app.command("benchmark")
 def benchmark_cmd(
     sample_size: int = typer.Option(5, "--samples", "-s", help="Number of benchmark tasks to run (1-21)"),
-    export: Optional[Path] = typer.Option(None, "--export", "-e", help="Export benchmark results to file (.json or .md)"),
+    export: Optional[Path] = typer.Option(
+        None, "--export", "-e", help="Export benchmark results to file (.json or .md)"
+    ),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output raw JSON format"),
 ) -> None:
     """Runs evaluation benchmark tasks across policies (adaptive, always_cheap, always_strong)."""
     client = GatewayClient()
 
     policies = ["adaptive", "always_cheap", "always_strong"]
-    console.print(f"[bold cyan]Initiating Smart AI Benchmark across {len(policies)} policies on {sample_size} tasks...[/bold cyan]")
+    console.print(
+        f"[bold cyan]Initiating Smart AI Benchmark across {len(policies)} policies on {sample_size} tasks...[/bold cyan]"
+    )
 
     try:
         with Progress(

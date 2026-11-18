@@ -13,8 +13,14 @@ from app.domain.router import DeterministicRouter
         # 1. Complex request followed by a simple request
         (
             [
-                {"role": "user", "content": "Design a complex distributed multi-agent architecture with Byzantine fault tolerance."},
-                {"role": "assistant", "content": "Here is the distributed architecture using PBFT and vector clocks..."},
+                {
+                    "role": "user",
+                    "content": "Design a complex distributed multi-agent architecture with Byzantine fault tolerance.",
+                },
+                {
+                    "role": "assistant",
+                    "content": "Here is the distributed architecture using PBFT and vector clocks...",
+                },
             ],
             "Hi.",
             ComplexityLevel.SIMPLE,
@@ -33,8 +39,14 @@ from app.domain.router import DeterministicRouter
         # 3. Coding request followed by casual conversation
         (
             [
-                {"role": "user", "content": "Debug this complex asynchronous Python application suffering from deadlocks and race conditions."},
-                {"role": "assistant", "content": "The deadlock is caused by inverted lock acquisition on lines 42 and 58."},
+                {
+                    "role": "user",
+                    "content": "Debug this complex asynchronous Python application suffering from deadlocks and race conditions.",
+                },
+                {
+                    "role": "assistant",
+                    "content": "The deadlock is caused by inverted lock acquisition on lines 42 and 58.",
+                },
             ],
             "Thanks, what is the meaning of life?",
             ComplexityLevel.SIMPLE,
@@ -57,7 +69,10 @@ from app.domain.router import DeterministicRouter
         # 5. Complex question followed by another simple query
         (
             [
-                {"role": "user", "content": "Design a high-throughput microservices architecture with Kafka and event sourcing."},
+                {
+                    "role": "user",
+                    "content": "Design a high-throughput microservices architecture with Kafka and event sourcing.",
+                },
                 {"role": "assistant", "content": "Architecture plan provided."},
             ],
             "What is Python?",

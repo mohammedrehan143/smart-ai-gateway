@@ -45,7 +45,12 @@ class UnauthorizedError(GatewayError):
 
 
 class RateLimitError(GatewayError):
-    def __init__(self, message: str = "Rate limit exceeded", retry_after_s: Optional[float] = None, trace_id: Optional[str] = None):
+    def __init__(
+        self,
+        message: str = "Rate limit exceeded",
+        retry_after_s: Optional[float] = None,
+        trace_id: Optional[str] = None,
+    ):
         super().__init__(
             message=message,
             error_type="rate_limited",
@@ -112,7 +117,9 @@ class ForbiddenError(GatewayError):
 
 
 class SSRFSecurityError(GatewayError):
-    def __init__(self, message: str = "Destination IP or URL is not permitted (SSRF protection)", trace_id: Optional[str] = None):
+    def __init__(
+        self, message: str = "Destination IP or URL is not permitted (SSRF protection)", trace_id: Optional[str] = None
+    ):
         super().__init__(
             message=message,
             error_type="ssrf_violation",

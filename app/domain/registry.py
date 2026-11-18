@@ -153,7 +153,8 @@ class ModelRegistry:
 
     def get_by_tier(self, tier: Literal["cheap", "strong"], provider: Optional[str] = None) -> List[ModelMetadata]:
         return [
-            m for m in self._models.values()
+            m
+            for m in self._models.values()
             if m.tier == tier and (provider is None or m.provider == provider) and m.is_active
         ]
 

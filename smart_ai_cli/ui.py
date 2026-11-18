@@ -18,7 +18,9 @@ error_console = Console(stderr=True)
 
 class ChatPrompt(Prompt):
     """Custom prompt with clean suffix for interactive chatting."""
+
     prompt_suffix = " "
+
 
 ASCII_BANNER = r"""[bold cyan]
    ____                      __     ___    ____   ________    ____
@@ -159,7 +161,9 @@ def print_chat_metadata(
     # Tokens detail
     in_tok = input_tokens or 0
     out_tok = output_tokens or 0
-    tok_str = f"[white]{tokens}[/] [dim](in: {in_tok}, out: {out_tok})[/]" if (in_tok or out_tok) else f"[white]{tokens}[/]"
+    tok_str = (
+        f"[white]{tokens}[/] [dim](in: {in_tok}, out: {out_tok})[/]" if (in_tok or out_tok) else f"[white]{tokens}[/]"
+    )
 
     lines = []
     if prompt:
@@ -167,8 +171,12 @@ def print_chat_metadata(
         lines.append(f"[dim]Prompt:[/] [bold italic]{truncated_prompt}[/]")
 
     lines.append(f"[dim]Classification:[/] {level_str} • [dim]Reason:[/] {reason or 'Standard routing heuristic'}")
-    lines.append(f"[dim]Routing:[/] {agent_badge} [dim]({tier})[/] • [dim]Provider:[/] [yellow]{provider or 'openai'}[/] • [dim]Model:[/] [bold white]{model}[/]")
-    lines.append(f"[dim]Mock Mode:[/] {mock_indicator} • [dim]Latency:[/] [cyan]{latency_ms}ms[/] • [dim]Tokens:[/] {tok_str} • [dim]Cost:[/] [bold cyan]{cost_str}[/]")
+    lines.append(
+        f"[dim]Routing:[/] {agent_badge} [dim]({tier})[/] • [dim]Provider:[/] [yellow]{provider or 'openai'}[/] • [dim]Model:[/] [bold white]{model}[/]"
+    )
+    lines.append(
+        f"[dim]Mock Mode:[/] {mock_indicator} • [dim]Latency:[/] [cyan]{latency_ms}ms[/] • [dim]Tokens:[/] {tok_str} • [dim]Cost:[/] [bold cyan]{cost_str}[/]"
+    )
     if trace_str or cache_badge:
         lines.append(f"{trace_str}{cache_badge}".strip())
 
