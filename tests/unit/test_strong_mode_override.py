@@ -451,3 +451,105 @@ async def test_chat_completions_with_x_gateway_mode_header():
         assert data["routing"]["selected_mode"] == "strong"
         assert data["routing"]["reasoning_effort"] == "high"
         assert data["model"] in ["mock-strong", "gpt-4o", "claude-3-5-sonnet", "deepseek-r1-distill-llama-70b"] or data["routing"]["actual_model"] is not None
+
+
+# ==============================================================================
+# 7. Multi-Turn Auto Mode Routing & Natural Language Switching Tests
+# ==============================================================================
+def test_auto_mode_subsequent_simple_prompts_route_to_weak():
+    """In Auto mode, after a complex prompt, subsequent simple prompts route back to Weak Agent."""
+    router = IntelligentRouter()
+
+    # Step 1: Complex prompt routes to Strong Agent
+    complex_prompt = (
+        "Architect a distributed, fault-tolerant event sourcing system in Python and Go, "
+        "providing formal mathematical proof of linearizability and consensus under Byzantine faults."
+    )
+    decision_1 = router.classify_and_route(prompt=complex_prompt, mode="auto")
+    assert decision_1.agent == "strong"
+    assert decision_1.complexity >= 4
+
+    # Step 2: Multi-turn history with complex prompt, but current prompt is simple
+    history = [
+        {"role": "user", "content": complex_prompt},
+        {"role": "assistant", "content": "Here is the architectural design for the traffic system..."},
+    ]
+
+    for simple_prompt in ["hello", "hy", "forget that", "thanks!"]:
+        decision_simple = router.classify_and_route(
+            prompt=simple_prompt,
+            conversation_history=history,
+            mode="auto",
+        )
+        assert decision_simple.agent == "weak", f"Prompt '{simple_prompt}' should route to weak agent but routed to {decision_simple.agent}"
+        assert decision_simple.complexity <= 2
+
+
+def test_natural_language_agent_switching_parser():
+    """Tests natural language mode and agent switching intent recognition."""
+    from smart_ai_cli.commands.chat import parse_mode_switch_intent
+
+    # Weak / Fast intents
+    assert parse_mode_switch_intent("chage the strong agent to weak agent") == "fast"
+    assert parse_mode_switch_intent("change the strong agent to weak agent") == "fast"
+    assert parse_mode_switch_intent("switch to weak agent") == "fast"
+    assert parse_mode_switch_intent("use weak agent") == "fast"
+    assert parse_mode_switch_intent("go to weak agent") == "fast"
+    assert parse_mode_switch_intent("switch to fast mode") == "fast"
+
+    # Strong / Expert intents
+    assert parse_mode_switch_intent("switch to strong agent") == "strong"
+    assert parse_mode_switch_intent("change to strong agent") == "strong"
+    assert parse_mode_switch_intent("use strong agent") == "strong"
+    assert parse_mode_switch_intent("switch to expert mode") == "expert"
+
+    # Auto / Adaptive intents
+    assert parse_mode_switch_intent("switch to auto") == "auto"
+    assert parse_mode_switch_intent("change to auto mode") == "auto"
+    assert parse_mode_switch_intent("switch to adaptive") == "auto"
+
+    # Normal queries that should NOT trigger a mode switch
+    assert parse_mode_switch_intent("hello") is None
+    assert parse_mode_switch_intent("can you write a function to switch two values in python?") is None
+    assert parse_mode_switch_intent("please create a file named test.py") is None
+
+
+def test_strong_agent_does_not_borrow_weak_groq_key():
+    """DynamicProviderAdapter must NOT use GROQ_API_KEY when resolving strong tier models."""
+    import os
+    from app.providers.resolver import DynamicProviderAdapter
+    from app.core.errors import ProviderAuthError
+
+    adapter = DynamicProviderAdapter()
+
+    # Save env
+    old_groq = os.environ.get("GROQ_API_KEY")
+    old_openai = os.environ.get("OPENAI_API_KEY")
+    old_env = os.environ.get("APP_ENV")
+
+    try:
+        os.environ["GROQ_API_KEY"] = "gsk_prod_live_groq_key_9876543210"
+        os.environ.pop("OPENAI_API_KEY", None)
+
+        # Resolving weak model should succeed with Groq (default_user or unconfigured tenant)
+        resolved_weak = adapter._resolve_adapter("llama-3.1-8b-instant", user_id="default_user")
+        assert resolved_weak.provider_name == "groq"
+
+        # Resolving strong model (gpt-4o) must NOT borrow Groq key; must raise ProviderAuthError
+        with pytest.raises(ProviderAuthError) as exc_info:
+            adapter._resolve_adapter("gpt-4o", user_id="default_user")
+        assert "Strong Agent API key is not configured" in str(exc_info.value)
+
+    finally:
+        if old_groq is not None:
+            os.environ["GROQ_API_KEY"] = old_groq
+        else:
+            os.environ.pop("GROQ_API_KEY", None)
+        if old_openai is not None:
+            os.environ["OPENAI_API_KEY"] = old_openai
+        else:
+            os.environ.pop("OPENAI_API_KEY", None)
+        if old_env is not None:
+            os.environ["APP_ENV"] = old_env
+        else:
+            os.environ.pop("APP_ENV", None)

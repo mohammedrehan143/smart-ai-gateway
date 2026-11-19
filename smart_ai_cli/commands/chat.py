@@ -28,10 +28,78 @@ ACTION_PROMPT_REGEX = re.compile(
 )
 
 
+def parse_mode_switch_intent(text: str) -> Optional[str]:
+    """Detects natural language intent to switch agent or gateway mode.
+
+    Handles phrasing like:
+    - 'chage the strong agent to weak agent'
+    - 'change the strong agent to weak agent'
+    - 'switch to weak agent'
+    - 'switch to auto'
+    - 'switch to strong agent'
+    - 'switch to expert mode'
+    - 'use weak agent'
+    - 'go to weak agent'
+    - 'change agent to auto'
+    """
+    cleaned = text.strip().lower()
+    if len(cleaned) > 120:
+        return None
+
+    # Check for action verbs: change, chage, switch, set, select, activate, use, go to, move to
+    action_match = re.search(
+        r"\b(?:chage|change|switch|set|select|turn\s+on|activate|use|move\s+to|go\s+to|go\s+back\s+to)\b",
+        cleaned,
+    )
+    if not action_match:
+        return None
+
+    # Must specifically target agent or mode or tier
+    agent_or_mode_mentioned = bool(
+        re.search(r"\b(?:agent|mode|tier|model)\b", cleaned)
+        or re.search(r"\b(?:weak|strong|expert|fast|cheap|auto|adaptive|balanced)\b", cleaned)
+    )
+    if not agent_or_mode_mentioned:
+        return None
+
+    # Target partition: if " to " is in prompt, take the destination
+    target_text = cleaned
+    if " to " in cleaned:
+        target_text = cleaned.split(" to ", 1)[1]
+
+    # Target: Weak / Fast / Cheap
+    if re.search(r"\b(?:weak|cheap|fast)\b", target_text):
+        return "fast"
+    # Target: Strong
+    if re.search(r"\b(?:strong)\b", target_text):
+        return "strong"
+    # Target: Expert
+    if re.search(r"\b(?:expert)\b", target_text):
+        return "expert"
+    # Target: Auto / Adaptive / Balanced / Dynamic / Default
+    if re.search(r"\b(?:auto|adaptive|balanced|dynamic|default)\b", target_text):
+        return "auto"
+
+    # If no ' to ' target matched, check entire input
+    if re.search(r"\b(?:weak|cheap|fast)\b", cleaned):
+        return "fast"
+    if re.search(r"\b(?:expert)\b", cleaned):
+        return "expert"
+    if re.search(r"\b(?:strong)\b", cleaned):
+        return "strong"
+    if re.search(r"\b(?:auto|adaptive|balanced|dynamic|default)\b", cleaned):
+        return "auto"
+
+    return None
+
+
 @app.command("chat")
 def chat_cmd(
     policy: Optional[str] = typer.Option(
         None, "--policy", "-p", help="Routing policy: adaptive, always_cheap, always_strong"
+    ),
+    mode: Optional[str] = typer.Option(
+        None, "--mode", "-m", help="Gateway mode: auto, fast, balanced, strong, expert"
     ),
     temperature: Optional[float] = typer.Option(None, "--temperature", "-t", help="Sampling temperature (0.0 to 2.0)"),
     stream: Optional[bool] = typer.Option(None, "--stream/--no-stream", help="Enable or disable token streaming"),
@@ -41,6 +109,13 @@ def chat_cmd(
     active_policy = policy or cfg.default_policy
     active_temp = temperature if temperature is not None else cfg.default_temperature
     use_stream = stream if stream is not None else cfg.stream_output
+
+    # Mode defaults to auto for dynamic per-prompt routing unless explicitly specified
+    active_mode = (mode or "auto").lower()
+    if active_policy == "always_strong" and not mode:
+        active_mode = "strong"
+    elif active_policy == "always_cheap" and not mode:
+        active_mode = "fast"
 
     client = GatewayClient()
 
@@ -94,25 +169,36 @@ def chat_cmd(
             break
         elif user_input in ("/reset", "/clear"):
             conversation.clear()
-            console.print(f"{CHAT_INDENT}[bold green]✔[/bold green] Conversation history cleared.")
+            active_mode = "auto"
+            active_policy = "adaptive"
+            try:
+                client.set_session_mode("auto")
+            except Exception:
+                pass
+            console.print(f"{CHAT_INDENT}[bold green]✔[/bold green] Conversation history cleared and mode reset to Auto.")
             continue
         elif user_input.startswith("/mode"):
             parts = user_input.split()
             valid_modes = ("auto", "fast", "balanced", "strong", "expert")
             if len(parts) > 1 and parts[1].lower() in valid_modes:
                 chosen_mode = parts[1].lower()
+                active_mode = chosen_mode
                 if chosen_mode == "strong":
                     active_policy = "always_strong"
                 elif chosen_mode in ("fast", "weak"):
                     active_policy = "always_cheap"
                 else:
                     active_policy = "adaptive"
+                try:
+                    client.set_session_mode(active_mode)
+                except Exception:
+                    pass
                 console.print(
                     f"{CHAT_INDENT}[bold green]✔[/bold green] Switched gateway mode to: [bold magenta]{chosen_mode.upper()}[/bold magenta] (policy: [yellow]{active_policy}[/yellow])"
                 )
             else:
                 console.print(
-                    f"{CHAT_INDENT}[bold yellow]▲[/bold yellow] Usage: /mode <auto | fast | balanced | strong | expert>"
+                    f"{CHAT_INDENT}[bold yellow]▲[/bold yellow] Usage: /mode <auto | fast | balanced | strong | expert> (Current mode: [bold cyan]{active_mode.upper()}[/bold cyan])"
                 )
             continue
         elif user_input.startswith("/policy"):
@@ -140,11 +226,39 @@ def chat_cmd(
             console.print(
                 f"{CHAT_INDENT}[bold cyan]Available chat session commands:[/]\n"
                 f"{CHAT_INDENT}  /exit, /quit      - Exit chat session\n"
-                f"{CHAT_INDENT}  /reset, /clear    - Clear conversation history\n"
+                f"{CHAT_INDENT}  /reset, /clear    - Clear conversation history and reset mode to Auto\n"
+                f"{CHAT_INDENT}  /mode <name>      - Change mode (auto, fast, balanced, strong, expert)\n"
                 f"{CHAT_INDENT}  /policy <name>    - Change policy (adaptive, always_cheap, always_strong)\n"
                 f"{CHAT_INDENT}  /do <task>        - Run autonomous task (create/edit files, run commands)\n"
                 f"{CHAT_INDENT}  /help             - Display this help message"
             )
+            continue
+
+        # Natural language agent and mode switching (e.g. "chage the strong agent to weak agent", "switch to weak agent", "switch to auto")
+        switch_intent = parse_mode_switch_intent(user_input)
+        if switch_intent:
+            active_mode = switch_intent
+            if active_mode in ("fast", "weak"):
+                active_mode = "fast"
+                active_policy = "always_cheap"
+                desc = "Weak Agent (Fast mode - cost & speed optimized)"
+            elif active_mode == "strong":
+                active_policy = "always_strong"
+                desc = "Strong Agent (Strong mode - high reasoning effort)"
+            elif active_mode == "expert":
+                active_policy = "always_strong"
+                desc = "Expert Agent (Expert mode - maximum reasoning & verification)"
+            else:
+                active_mode = "auto"
+                active_policy = "adaptive"
+                desc = "Auto Mode (Dynamic intelligent routing per prompt)"
+
+            try:
+                client.set_session_mode(active_mode)
+            except Exception:
+                pass
+
+            console.print(f"{CHAT_INDENT}[bold green]✔[/bold green] Switched to [bold magenta]{desc}[/bold magenta].")
             continue
 
         effective_prompt = user_input
@@ -156,6 +270,7 @@ def chat_cmd(
                 user_input=effective_prompt,
                 conversation=conversation,
                 policy=active_policy,
+                mode=active_mode,
                 temperature=active_temp,
                 use_stream=use_stream,
                 indent=4,
@@ -206,6 +321,9 @@ def ask_cmd(
     policy: Optional[str] = typer.Option(
         None, "--policy", "-p", help="Routing policy (adaptive, always_cheap, always_strong)"
     ),
+    mode: Optional[str] = typer.Option(
+        None, "--mode", "-m", help="Gateway mode: auto, fast, balanced, strong, expert"
+    ),
     temperature: Optional[float] = typer.Option(None, "--temperature", "-t", help="Sampling temperature"),
     stream: bool = typer.Option(True, "--stream/--no-stream", help="Stream response tokens"),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output raw JSON completion response"),
@@ -217,6 +335,7 @@ def ask_cmd(
     cfg = default_config_manager.load_config()
     active_policy = policy or cfg.default_policy
     active_temp = temperature if temperature is not None else cfg.default_temperature
+    active_mode = mode.lower() if mode else None
 
     # Check if this is an autonomous file/task operation
     is_action_prompt = bool(ACTION_PROMPT_REGEX.match(prompt.strip()))
@@ -236,7 +355,7 @@ def ask_cmd(
 
     try:
         if json_output:
-            resp = client.chat(messages, policy=active_policy, temperature=active_temp)
+            resp = client.chat(messages, policy=active_policy, mode=active_mode, temperature=active_temp)
             console.print_json(json.dumps(resp))
             return
 
@@ -244,7 +363,9 @@ def ask_cmd(
             full_reply = ""
             meta_chunk: Optional[Dict] = None
 
-            for chunk in client.stream_chat(messages, policy=active_policy, temperature=active_temp):
+            for chunk in client.stream_chat(
+                messages, policy=active_policy, mode=active_mode, temperature=active_temp
+            ):
                 choices = chunk.get("choices", [])
                 if choices:
                     delta = choices[0].get("delta", {})

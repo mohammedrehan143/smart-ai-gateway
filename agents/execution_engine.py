@@ -141,10 +141,11 @@ class ExecutionEngine:
             raise InvalidRequestError("Prompt cannot be empty.")
 
         # 1. Resolve mode from request or persistent session configuration
-        session_mode = self.credential_mgr.get_session_mode(user_id)
         effective_mode_str = mode
-        if (not mode or mode in ("auto", "adaptive")) and session_mode:
-            effective_mode_str = session_mode
+        if not effective_mode_str:
+            session_mode = self.credential_mgr.get_session_mode(user_id)
+            if session_mode:
+                effective_mode_str = session_mode
         norm_mode = normalize_gateway_mode(effective_mode_str)
 
         # 2. Routing classification
@@ -166,24 +167,26 @@ class ExecutionEngine:
         if is_strong_override:
             chosen_agent_type = "strong"
 
-        # 3. Provider validation for Strong Mode
-        if is_strong_override:
+        # 3. Provider validation for Strong Mode / Strong Agent
+        if chosen_agent_type == "strong":
             if not self.strong_agent.is_configured(user_id):
                 from app.providers.resolver import is_mock_mode_explicitly_enabled
 
                 if is_mock_mode_explicitly_enabled():
                     # In test/mock environment, configure mock-strong default
-                    self.credential_mgr.store_agent_config(
-                        user_id=user_id,
-                        agent_type="strong",
-                        provider="mock",
-                        api_key="mock_strong_key_test",
-                        model_id="mock-strong",
-                    )
+                    cfg = self.credential_mgr.get_agent_config(user_id, "strong")
+                    if not cfg:
+                        self.credential_mgr.store_agent_config(
+                            user_id=user_id,
+                            agent_type="strong",
+                            provider="mock",
+                            api_key="mock_strong_key_test",
+                            model_id="mock-strong",
+                        )
                 else:
                     total_latency_ms = int((time.time() - start_time) * 1000)
                     routing_dict = decision.to_dict()
-                    routing_dict["fallback_status"] = "prohibited_in_strong_mode"
+                    routing_dict["fallback_status"] = "prohibited_in_strong_mode" if is_strong_override else "unconfigured_strong_agent"
                     err_resp = GatewayExecutionResponse(
                         id=req_id,
                         prompt=prompt,
@@ -196,14 +199,14 @@ class ExecutionEngine:
                         cost=0.0,
                         latency_ms=total_latency_ms,
                         success=False,
-                        error="Strong Agent is not configured. Please configure a valid provider and API key in Agent Settings.",
+                        error="Strong Agent API key is not configured. Please configure your Strong Agent provider and API key in Agent Settings (or run 'smartai login' / set OPENAI_API_KEY).",
                         selected_mode=norm_mode.value,
                         classification_level=decision.complexity,
                         routing_reason=decision.reason,
                         actual_provider="unconfigured",
                         actual_model="unconfigured",
                         reasoning_effort="high",
-                        fallback_status="prohibited_in_strong_mode",
+                        fallback_status=routing_dict["fallback_status"],
                         mock_mode=False,
                     )
                     await self._record_telemetry(user_id, err_resp)
@@ -256,8 +259,8 @@ class ExecutionEngine:
 
         # 5. Fallback Handling
         if result is None:
-            # If Strong Mode was explicitly selected, NEVER fall back to Weak Agent!
-            if is_strong_override:
+            # If Strong Agent was chosen (or Strong Mode override), NEVER fall back to Weak Agent!
+            if chosen_agent_type == "strong" or is_strong_override:
                 total_latency_ms = int((time.time() - start_time) * 1000)
                 cfg = self.credential_mgr.get_agent_config(user_id, "strong")
                 is_mock = (cfg.provider == "mock" or "mock" in cfg.model_id.lower()) if cfg else False
@@ -429,10 +432,11 @@ class ExecutionEngine:
         req_id = generate_id("greq")
         start_time = time.time()
 
-        session_mode = self.credential_mgr.get_session_mode(user_id)
         effective_mode_str = mode
-        if (not mode or mode in ("auto", "adaptive")) and session_mode:
-            effective_mode_str = session_mode
+        if not effective_mode_str:
+            session_mode = self.credential_mgr.get_session_mode(user_id)
+            if session_mode:
+                effective_mode_str = session_mode
         norm_mode = normalize_gateway_mode(effective_mode_str)
 
         manual_override: Optional[Literal["weak", "strong"]] = None
@@ -451,16 +455,22 @@ class ExecutionEngine:
         is_strong_override = norm_mode in (GatewayMode.STRONG, GatewayMode.EXPERT)
         chosen_agent_type = "strong" if is_strong_override else decision.agent
 
-        if is_strong_override and not self.strong_agent.is_configured(user_id):
+        if chosen_agent_type == "strong" and not self.strong_agent.is_configured(user_id):
             from app.providers.resolver import is_mock_mode_explicitly_enabled
 
             if is_mock_mode_explicitly_enabled():
-                self.credential_mgr.store_agent_config(
-                    user_id=user_id,
-                    agent_type="strong",
-                    provider="mock",
-                    api_key="mock_strong_key_test",
-                    model_id="mock-strong",
+                cfg = self.credential_mgr.get_agent_config(user_id, "strong")
+                if not cfg:
+                    self.credential_mgr.store_agent_config(
+                        user_id=user_id,
+                        agent_type="strong",
+                        provider="mock",
+                        api_key="mock_strong_key_test",
+                        model_id="mock-strong",
+                    )
+            else:
+                raise StrongModelUnavailableError(
+                    "Strong Agent API key is not configured. Please configure your Strong Agent provider and API key in Agent Settings (or run 'smartai login' / set OPENAI_API_KEY)."
                 )
 
         agent_obj = self.strong_agent if chosen_agent_type == "strong" else self.weak_agent

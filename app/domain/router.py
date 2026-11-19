@@ -58,9 +58,9 @@ class DeterministicRouter:
         cheap_default = cheap_alias or settings.CHEAP_MODEL_ALIAS
         strong_default = strong_alias or settings.STRONG_MODEL_ALIAS
 
-        # Check user session mode if options.mode is not specified
+        # Check user session mode ONLY if options.mode is not specified
         mode_val = options.mode
-        if not mode_val or mode_val in ("auto", "adaptive"):
+        if not mode_val:
             try:
                 from agents.credential_manager import default_credential_manager
 

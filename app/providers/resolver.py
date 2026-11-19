@@ -17,21 +17,12 @@ from app.providers.openai_compatible import OpenAICompatibleAdapter
 
 
 def is_mock_mode_explicitly_enabled() -> bool:
-    """Determines whether mock execution mode is explicitly enabled (test suite or explicit flag)."""
+    """Determines whether mock execution mode is explicitly enabled (test suite only)."""
     import os
     import sys
 
     if os.environ.get("APP_ENV") == "test" or "pytest" in sys.modules:
         return True
-    if os.environ.get("ENABLE_MOCK_GATEWAY", "").lower() in ("true", "1", "yes"):
-        return True
-    try:
-        from app.core.config import settings
-
-        if getattr(settings, "ENABLE_MOCK_GATEWAY", False):
-            return True
-    except Exception:
-        pass
     return False
 
 
@@ -117,10 +108,7 @@ class DynamicProviderAdapter(BaseProviderAdapter):
             target_agent = "weak" if tier == "cheap" else "strong"
             cfg = default_credential_manager.get_agent_config(effective_user_id, target_agent)
 
-            if not cfg or not cfg.is_enabled or not cfg.encrypted_key:
-                other_agent = "strong" if target_agent == "weak" else "weak"
-                cfg = default_credential_manager.get_agent_config(effective_user_id, other_agent)
-
+            # Strong Agent must strictly use its own configuration; never borrow Weak Agent credentials
             if cfg and cfg.is_enabled and cfg.encrypted_key:
                 raw_key = cfg.get_plaintext_key()
                 if _is_real_key(raw_key):
@@ -153,53 +141,62 @@ class DynamicProviderAdapter(BaseProviderAdapter):
                 f"Please register your API key at POST /v1/credentials before sending inference requests."
             )
 
-        groq_env_key = os.environ.get("GROQ_API_KEY")
-        if _is_real_key(groq_env_key) and (tier == "cheap" or not os.environ.get("OPENAI_API_KEY")):
-            return RealAgentAdapter(
-                provider="groq",
-                api_key=groq_env_key,
-                model_id="openai/gpt-oss-120b",
-                base_url="https://api.groq.com/openai/v1",
+        if tier == "cheap":
+            groq_env_key = os.environ.get("GROQ_API_KEY")
+            if _is_real_key(groq_env_key):
+                return RealAgentAdapter(
+                    provider="groq",
+                    api_key=groq_env_key,
+                    model_id="openai/gpt-oss-120b",
+                    base_url="https://api.groq.com/openai/v1",
+                )
+            openai_env_key = os.environ.get("OPENAI_API_KEY")
+            if _is_real_key(openai_env_key):
+                return RealAgentAdapter(
+                    provider="openai",
+                    api_key=openai_env_key,
+                    model_id="gpt-4o-mini",
+                )
+            cheap_key = settings.CHEAP_PROVIDER_API_KEY or settings.PROVIDER_API_KEY
+            if cheap_key and _is_real_key(cheap_key):
+                return OpenAICompatibleAdapter(
+                    api_key=cheap_key,
+                    base_url=settings.CHEAP_PROVIDER_BASE_URL or settings.PROVIDER_BASE_URL,
+                )
+        else:
+            # Strong tier strictly uses OpenAI or configured strong provider keys.
+            # It NEVER borrows Weak Agent's GROQ_API_KEY.
+            openai_env_key = os.environ.get("OPENAI_API_KEY")
+            if _is_real_key(openai_env_key):
+                return RealAgentAdapter(
+                    provider="openai",
+                    api_key=openai_env_key,
+                    model_id="gpt-4o",
+                )
+            strong_key = settings.STRONG_PROVIDER_API_KEY
+            if strong_key and _is_real_key(strong_key):
+                return OpenAICompatibleAdapter(
+                    api_key=strong_key,
+                    base_url=settings.STRONG_PROVIDER_BASE_URL or settings.PROVIDER_BASE_URL,
+                )
+
+        # 4. Explicit Mock Models (only if explicitly named mock)
+        if "mock" in model_alias.lower():
+            return self._mock_adapter
+
+        # In Strong tier, NEVER silently fall back to mock adapter!
+        if tier == "strong":
+            raise ProviderAuthError(
+                "Strong Agent API key is not configured. Please configure your Strong Agent provider and API key in Agent Settings (or run 'smartai login' / set OPENAI_API_KEY)."
             )
 
-        openai_env_key = os.environ.get("OPENAI_API_KEY")
-        if _is_real_key(openai_env_key):
-            return RealAgentAdapter(
-                provider="openai",
-                api_key=openai_env_key,
-                model_id="gpt-4o" if tier == "strong" else "gpt-4o-mini",
-            )
-
-        # 4. Check dedicated cheap model credential
-        if model_alias == settings.CHEAP_MODEL_ALIAS:
-            api_key = settings.CHEAP_PROVIDER_API_KEY or settings.PROVIDER_API_KEY
-            base_url = settings.CHEAP_PROVIDER_BASE_URL or settings.PROVIDER_BASE_URL
-            if api_key and _is_real_key(api_key):
-                return OpenAICompatibleAdapter(api_key=api_key, base_url=base_url)
-
-        # 5. Check dedicated strong model credential
-        if model_alias in (settings.STRONG_MODEL_ALIAS, settings.FALLBACK_MODEL_ALIAS):
-            api_key = settings.STRONG_PROVIDER_API_KEY or settings.PROVIDER_API_KEY
-            base_url = settings.STRONG_PROVIDER_BASE_URL or settings.PROVIDER_BASE_URL
-            if api_key and _is_real_key(api_key):
-                return OpenAICompatibleAdapter(api_key=api_key, base_url=base_url)
-
-        # 6. Check general provider key
-        if settings.PROVIDER_API_KEY and _is_real_key(settings.PROVIDER_API_KEY):
-            return OpenAICompatibleAdapter(
-                api_key=settings.PROVIDER_API_KEY,
-                base_url=settings.PROVIDER_BASE_URL,
-            )
-
-        # 7. Explicit Mock Mode (test suite or explicit mock gateway setting)
+        # 5. Cheap tier in test suite
         if is_mock_mode_explicitly_enabled():
             return self._mock_adapter
 
-        # In production / live execution, NEVER silently fall back to mock mode
-        target_agent = "weak" if tier == "cheap" else "strong"
         raise ProviderAuthError(
-            f"No live API key configured for {target_agent} agent ({model_alias}). "
-            f"Please configure your API key in Agent Settings (https://smart-ai-gateway.onrender.com) or set GROQ_API_KEY / OPENAI_API_KEY in your environment."
+            f"No live API key configured for weak agent ({model_alias}). "
+            f"Please configure your API key in Agent Settings or set GROQ_API_KEY in your environment."
         )
 
     async def generate(

@@ -242,6 +242,36 @@ class GatewayClient:
         except httpx.ConnectError as exc:
             raise GatewayConnectionError(f"Cannot connect to Gateway at {self.base_url}: {exc}") from exc
 
+    # --- Agent Modes ---
+
+    def get_session_mode(self, user_id: Optional[str] = None) -> str:
+        """Fetches the current persistent session routing mode."""
+        url = f"{self.base_url}/api/agents/mode"
+        params = {"user_id": user_id} if user_id else {}
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                resp = client.get(url, headers=self._headers(), params=params)
+                if resp.status_code == 200:
+                    return resp.json().get("mode", "auto")
+        except Exception:
+            pass
+        return "auto"
+
+    def set_session_mode(self, mode: str, user_id: Optional[str] = None) -> str:
+        """Sets the persistent session routing mode."""
+        url = f"{self.base_url}/api/agents/mode"
+        payload = {"mode": mode}
+        if user_id:
+            payload["user_id"] = user_id
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                resp = client.post(url, headers=self._headers(), json=payload)
+                if resp.status_code == 200:
+                    return resp.json().get("mode", mode)
+        except Exception:
+            pass
+        return mode
+
     # --- Chat Completions & Streaming ---
 
     def _sanitize_messages(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -271,15 +301,20 @@ class GatewayClient:
         self,
         messages: List[Dict[str, Any]],
         policy: str = "adaptive",
+        mode: Optional[str] = None,
         temperature: float = 0.2,
         max_output_tokens: int = 1024,
         tools: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Executes a standard non-streaming chat completion."""
         url = f"{self.base_url}/v1/chat"
+        routing_dict: Dict[str, Any] = {"policy": policy}
+        if mode:
+            routing_dict["mode"] = mode
         payload: Dict[str, Any] = {
             "messages": self._sanitize_messages(messages),
-            "routing": {"policy": policy},
+            "routing": routing_dict,
+            "mode": mode,
             "parameters": {
                 "temperature": temperature,
                 "max_output_tokens": max_output_tokens,
@@ -301,15 +336,20 @@ class GatewayClient:
         self,
         messages: List[Dict[str, Any]],
         policy: str = "adaptive",
+        mode: Optional[str] = None,
         temperature: float = 0.2,
         max_output_tokens: int = 1024,
         tools: Optional[List[Dict[str, Any]]] = None,
     ) -> Generator[Dict[str, Any], None, None]:
         """Streams chat completion tokens and metadata chunks over Server-Sent Events."""
         url = f"{self.base_url}/v1/chat"
+        routing_dict: Dict[str, Any] = {"policy": policy}
+        if mode:
+            routing_dict["mode"] = mode
         payload: Dict[str, Any] = {
             "messages": self._sanitize_messages(messages),
-            "routing": {"policy": policy},
+            "routing": routing_dict,
+            "mode": mode,
             "parameters": {
                 "temperature": temperature,
                 "max_output_tokens": max_output_tokens,

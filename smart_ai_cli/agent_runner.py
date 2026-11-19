@@ -336,6 +336,7 @@ class AutonomousAgentRunner:
         user_input: str,
         conversation: List[Dict[str, Any]],
         policy: str = "adaptive",
+        mode: str = "auto",
         temperature: float = 0.2,
         cwd: Optional[Path | str] = None,
         use_stream: bool = True,
@@ -376,15 +377,24 @@ class AutonomousAgentRunner:
                             stream_iter = self.client.stream_chat(
                                 conversation,
                                 policy=policy,
+                                mode=mode,
                                 temperature=temperature,
                                 tools=TOOL_DEFINITIONS,
                             )
                         except TypeError:
-                            stream_iter = self.client.stream_chat(
-                                conversation,
-                                policy=policy,
-                                temperature=temperature,
-                            )
+                            try:
+                                stream_iter = self.client.stream_chat(
+                                    conversation,
+                                    policy=policy,
+                                    temperature=temperature,
+                                    tools=TOOL_DEFINITIONS,
+                                )
+                            except TypeError:
+                                stream_iter = self.client.stream_chat(
+                                    conversation,
+                                    policy=policy,
+                                    temperature=temperature,
+                                )
                         first_chunk = None
                         for chunk in stream_iter:
                             first_chunk = chunk
@@ -443,15 +453,24 @@ class AutonomousAgentRunner:
                             resp = self.client.chat(
                                 conversation,
                                 policy=policy,
+                                mode=mode,
                                 temperature=temperature,
                                 tools=TOOL_DEFINITIONS,
                             )
                         except TypeError:
-                            resp = self.client.chat(
-                                conversation,
-                                policy=policy,
-                                temperature=temperature,
-                            )
+                            try:
+                                resp = self.client.chat(
+                                    conversation,
+                                    policy=policy,
+                                    temperature=temperature,
+                                    tools=TOOL_DEFINITIONS,
+                                )
+                            except TypeError:
+                                resp = self.client.chat(
+                                    conversation,
+                                    policy=policy,
+                                    temperature=temperature,
+                                )
 
                     choices = resp.get("choices", [])
                     choice_msg = choices[0].get("message", {}) if choices else {}
