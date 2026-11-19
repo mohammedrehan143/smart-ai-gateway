@@ -59,6 +59,7 @@ class CredentialManager:
 
     def __init__(self, db_path: Optional[str] = None):
         self._configs: Dict[tuple[str, str], AgentConfig] = {}
+        self._session_modes: Dict[str, str] = {}
         if db_path is not None:
             self._db_path = db_path
         else:
@@ -129,6 +130,19 @@ class CredentialManager:
                         updated_at=row["updated_at"],
                     )
                     self._configs[(cfg.user_id, cfg.agent_type)] = cfg
+
+                conn.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS user_session_modes (
+                        user_id TEXT PRIMARY KEY,
+                        mode TEXT NOT NULL,
+                        updated_at REAL NOT NULL
+                    );
+                    """
+                )
+                mode_cursor = conn.execute("SELECT user_id, mode FROM user_session_modes")
+                for mrow in mode_cursor.fetchall():
+                    self._session_modes[mrow["user_id"]] = mrow["mode"]
         except Exception:
             pass
         finally:
@@ -311,6 +325,91 @@ class CredentialManager:
         """Checks if the agent is configured and active."""
         config = self.get_agent_config(user_id, agent_type)
         return bool(config and config.is_enabled and config.encrypted_key and config.model_id)
+
+    def validate_agent_config(
+        self, user_id: str, agent_type: Literal["weak", "strong"]
+    ) -> tuple[bool, Optional[str]]:
+        """Validates agent configuration, provider, credentials format, and model settings."""
+        cfg = self.get_agent_config(user_id, agent_type)
+        if not cfg:
+            return False, f"{agent_type.capitalize()} Agent is not configured. Please configure a provider and API key in Agent Settings."
+        if not cfg.is_enabled:
+            return False, f"{agent_type.capitalize()} Agent is currently disabled."
+
+        from app.domain.modes import validate_provider_and_model
+
+        try:
+            plaintext_key = cfg.get_plaintext_key()
+        except Exception as e:
+            return False, f"Could not decrypt credentials for {agent_type} agent: {e}"
+
+        return validate_provider_and_model(
+            provider=cfg.provider,
+            model_id=cfg.model_id,
+            api_key=plaintext_key,
+            base_url=cfg.base_url,
+            is_mock_allowed=True,
+        )
+
+    def set_session_mode(self, user_id: str, mode: str) -> str:
+        """Stores persistent routing mode in-memory and in SQLite for the session/user."""
+        from app.domain.modes import normalize_gateway_mode
+
+        norm = normalize_gateway_mode(mode).value
+        self._session_modes[user_id] = norm
+
+        conn = self._get_connection()
+        if conn:
+            try:
+                with conn:
+                    conn.execute(
+                        """
+                        INSERT INTO user_session_modes (user_id, mode, updated_at)
+                        VALUES (?, ?, ?)
+                        ON CONFLICT(user_id) DO UPDATE SET mode=excluded.mode, updated_at=excluded.updated_at
+                        """,
+                        (user_id, norm, time.time()),
+                    )
+            except Exception:
+                pass
+            finally:
+                conn.close()
+        return norm
+
+    def get_session_mode(self, user_id: str, default: str = "auto") -> str:
+        """Retrieves persistent routing mode for user session, defaulting to 'auto'."""
+        if not user_id:
+            return default
+        if user_id in self._session_modes:
+            return self._session_modes[user_id]
+
+        conn = self._get_connection()
+        if conn:
+            try:
+                with conn:
+                    cursor = conn.execute("SELECT mode FROM user_session_modes WHERE user_id = ?", (user_id,))
+                    row = cursor.fetchone()
+                    if row:
+                        self._session_modes[user_id] = row["mode"]
+                        return row["mode"]
+            except Exception:
+                pass
+            finally:
+                conn.close()
+        return default
+
+    def clear_session_mode(self, user_id: str) -> None:
+        """Clears persistent session mode for a user."""
+        self._session_modes.pop(user_id, None)
+        conn = self._get_connection()
+        if conn:
+            try:
+                with conn:
+                    conn.execute("DELETE FROM user_session_modes WHERE user_id = ?", (user_id,))
+            except Exception:
+                pass
+            finally:
+                conn.close()
 
 
 # Global singleton instance

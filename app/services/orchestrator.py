@@ -102,6 +102,17 @@ class ChatOrchestrator:
             format_json = True
 
         # 1. Deterministic Auto-Routing & Intent Profiling
+        req_mode = request.routing.mode or getattr(request, "mode", None)
+        if not req_mode and request.metadata:
+            req_mode = request.metadata.get("mode") or request.metadata.get("selected_mode")
+        if not req_mode:
+            try:
+                from agents.credential_manager import default_credential_manager
+
+                req_mode = default_credential_manager.get_session_mode(user_id)
+            except Exception:
+                pass
+
         routing_opts = RoutingOptions(
             policy=request.routing.policy,
             preference=request.routing.preference,
@@ -114,6 +125,7 @@ class ChatOrchestrator:
             user_id=user_id,
             project_id=project_id,
             max_cost_limit=request.routing.max_cost_limit,
+            mode=req_mode,
         )
         routing_decision = self.router.route(
             messages=domain_messages,
@@ -438,12 +450,21 @@ class ChatOrchestrator:
             elif final_model_alias == settings.STRONG_MODEL_ALIAS:
                 final_tier = "strong"
 
+        is_mock = (
+            getattr(completion, "is_mock", False)
+            or (completion and completion.provider == "mock")
+            or ("mock" in final_model_alias.lower())
+        )
+        actual_provider = "mock" if is_mock else (completion.provider if completion else provider_name)
+        actual_model = completion.model_alias if (completion and completion.model_alias) else final_model_alias
+        fb_status = "fallback_triggered" if fallback_used else "not_triggered"
+
         final_decision = RoutingDecision(
             policy_name=routing_decision.policy_name,
             policy_version=routing_decision.policy_version,
             tier=final_tier,
             selected_model_alias=final_model_alias,
-            selected_provider=provider_name,
+            selected_provider=actual_provider,
             reason_code="FALLBACK" if fallback_used else routing_decision.reason_code,
             reason_message=f"{routing_decision.reason_message} (fallback used: {fallback_used})"
             if fallback_used
@@ -462,7 +483,13 @@ class ChatOrchestrator:
             evaluation=evaluation_result.to_dict() if evaluation_result else None,
             classification_level=routing_decision.classification_level,
             agent="Weak Agent" if final_tier == "cheap" else "Strong Agent",
-            mock_mode=getattr(completion, "is_mock", False) if completion else False,
+            mock_mode=is_mock,
+            selected_mode=routing_decision.selected_mode,
+            routing_reason=routing_decision.routing_reason or routing_decision.reason_message,
+            actual_provider=actual_provider,
+            actual_model=actual_model,
+            reasoning_effort=routing_decision.reasoning_effort,
+            fallback_status=fb_status,
         )
 
         request_record = GatewayRequestRecord(
@@ -577,14 +604,15 @@ class ChatOrchestrator:
             id=req_id,
             object="gateway.completion",
             created=int(start_time),
-            model=final_model_alias,
-            provider=provider_name,
+            model=actual_model,
+            provider=actual_provider,
             choices=[choice],
             usage=UsageSchema(
                 input_tokens=completion.input_tokens,
                 output_tokens=completion.output_tokens,
                 total_tokens=completion.total_tokens,
                 cost_estimate=cost_res.estimated_cost if cost_res else None,
+                estimated_cost=cost_res.estimated_cost if cost_res else None,
                 currency=cost_res.currency if cost_res else "USD",
                 cost_status=cost_res.cost_status if cost_res else "unavailable",
             ),
@@ -605,7 +633,18 @@ class ChatOrchestrator:
                 evaluation=final_decision.evaluation,
                 classification_level=final_decision.classification_level,
                 agent=final_decision.agent,
-                mock_mode=final_decision.mock_mode,
+                mock_mode=is_mock,
+                selected_mode=final_decision.selected_mode,
+                routing_reason=final_decision.routing_reason or final_decision.reason_message,
+                actual_provider=actual_provider,
+                actual_model=actual_model,
+                reasoning_effort=final_decision.reasoning_effort,
+                fallback_status=fb_status,
+                token_usage={
+                    "input_tokens": completion.input_tokens,
+                    "output_tokens": completion.output_tokens,
+                    "total_tokens": completion.total_tokens,
+                },
             ),
             latency_ms=total_latency,
             trace_id=trace_id,

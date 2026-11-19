@@ -12,6 +12,7 @@ from app.domain.classifier import ComplexityLevel
 from app.domain.entities import ChatMessage, RoutingDecision, RoutingOptions
 from app.domain.features import extract_features
 from app.domain.intent_engine import IntentIntelligenceEngine, TaskProfile
+from app.domain.modes import GatewayMode, normalize_gateway_mode
 from app.domain.registry import ModelMetadata, ModelRegistry, registry
 
 
@@ -57,20 +58,41 @@ class DeterministicRouter:
         cheap_default = cheap_alias or settings.CHEAP_MODEL_ALIAS
         strong_default = strong_alias or settings.STRONG_MODEL_ALIAS
 
-        # Check if weak/strong agent models are configured in CredentialManager (only when not in test/mock mode and not explicitly overridden)
-        try:
-            from app.providers.resolver import is_mock_mode_explicitly_enabled
-
-            if not is_mock_mode_explicitly_enabled() and not cheap_alias and not strong_alias:
+        # Check user session mode if options.mode is not specified
+        mode_val = options.mode
+        if not mode_val or mode_val in ("auto", "adaptive"):
+            try:
                 from agents.credential_manager import default_credential_manager
 
-                effective_user = options.user_id or "default_user"
-                weak_cfg = default_credential_manager.get_agent_config(effective_user, "weak")
-                if weak_cfg and weak_cfg.is_enabled and weak_cfg.model_id:
-                    cheap_default = weak_cfg.model_id
-                strong_cfg = default_credential_manager.get_agent_config(effective_user, "strong")
-                if strong_cfg and strong_cfg.is_enabled and strong_cfg.model_id:
+                eff_u = options.user_id or "default_user"
+                session_mode = default_credential_manager.get_session_mode(eff_u)
+                if session_mode:
+                    mode_val = session_mode
+            except Exception:
+                pass
+
+        resolved_mode: Optional[GatewayMode] = normalize_gateway_mode(mode_val) if mode_val else None
+        if not resolved_mode and policy_name:
+            if policy_name == "always_strong":
+                resolved_mode = GatewayMode.STRONG
+            elif policy_name == "always_cheap":
+                resolved_mode = GatewayMode.FAST
+
+        # Check configured agents in CredentialManager
+        strong_cfg = None
+        weak_cfg = None
+        try:
+            from agents.credential_manager import default_credential_manager
+
+            effective_user = options.user_id or "default_user"
+            strong_cfg = default_credential_manager.get_agent_config(effective_user, "strong")
+            if strong_cfg and strong_cfg.is_enabled and strong_cfg.model_id:
+                if not strong_alias:
                     strong_default = strong_cfg.model_id
+            weak_cfg = default_credential_manager.get_agent_config(effective_user, "weak")
+            if weak_cfg and weak_cfg.is_enabled and weak_cfg.model_id:
+                if not cheap_alias:
+                    cheap_default = weak_cfg.model_id
         except Exception:
             pass
 
@@ -89,22 +111,113 @@ class DeterministicRouter:
         req_capabilities: Set[str] = set(profile.required_capabilities)
 
         # -------------------------------------------------------------
-        # 2. Manual / Forced Legacy Policies
+        # PRIORITY 1: Explicit Expert Mode Override
         # -------------------------------------------------------------
-        if policy_name == "always_cheap" or strategy == "always_cheap":
-            cheap_meta = self.registry.get_model(cheap_default)
-            provider = cheap_meta.provider if cheap_meta else "mock"
+        if resolved_mode == GatewayMode.EXPERT:
+            strong_meta = self.registry.get_model(strong_default)
+            actual_prov = (
+                strong_cfg.provider
+                if (strong_cfg and strong_cfg.provider)
+                else (strong_meta.provider if strong_meta else "mock")
+            )
+            is_mock = actual_prov == "mock" or "mock" in strong_default.lower()
+            if is_mock:
+                actual_prov = "mock"
             return RoutingDecision(
-                policy_name="always_cheap",
+                policy_name="expert",
+                policy_version=self.policy_version,
+                tier="strong",
+                selected_model_alias=strong_default,
+                selected_provider=actual_prov,
+                reason_code="EXPLICIT_EXPERT_MODE",
+                reason_message="Explicit Expert Mode selected: frontier capability, deep reasoning, and multi-step verification enforced.",
+                feature_summary=feature_summary,
+                complexity="EXPERT",
+                strategy="quality_first",
+                task_category=profile.category.value,
+                alternative_eligible_models=[
+                    m.alias for m in self.registry.get_by_tier("strong") if m.alias != strong_default
+                ],
+                estimated_cost=self._estimate_cost(strong_default, features.estimated_tokens),
+                candidate_progression=[strong_default],
+                classification_level=5,
+                agent="Strong Agent",
+                mock_mode=is_mock,
+                selected_mode="expert",
+                reasoning_effort="high",
+                actual_provider=actual_prov,
+                actual_model=strong_default,
+                fallback_status="prohibited_in_strong_mode",
+            )
+
+        # -------------------------------------------------------------
+        # PRIORITY 2: Explicit Strong Mode Override
+        # -------------------------------------------------------------
+        if resolved_mode == GatewayMode.STRONG or policy_name == "always_strong" or strategy == "always_strong":
+            strong_meta = self.registry.get_model(strong_default)
+            actual_prov = (
+                strong_cfg.provider
+                if (strong_cfg and strong_cfg.provider)
+                else (strong_meta.provider if strong_meta else "mock")
+            )
+            is_mock = actual_prov == "mock" or "mock" in strong_default.lower()
+            if is_mock:
+                actual_prov = "mock"
+            return RoutingDecision(
+                policy_name="strong" if resolved_mode == GatewayMode.STRONG else "always_strong",
+                policy_version=self.policy_version,
+                tier="strong",
+                selected_model_alias=strong_default,
+                selected_provider=actual_prov,
+                reason_code="EXPLICIT_STRONG_MODE" if resolved_mode == GatewayMode.STRONG else "POLICY_FORCED_STRONG",
+                reason_message="Explicit Strong Mode selected: backend-enforced strong model override bypassing weak-agent classification."
+                if resolved_mode == GatewayMode.STRONG
+                else "Caller forced strong tier",
+                feature_summary=feature_summary,
+                complexity="COMPLEX" if complexity in ("SIMPLE", "MODERATE") else complexity,
+                strategy=strategy or "quality_first",
+                task_category=profile.category.value,
+                alternative_eligible_models=[
+                    m.alias for m in self.registry.get_by_tier("strong") if m.alias != strong_default
+                ],
+                estimated_cost=self._estimate_cost(strong_default, features.estimated_tokens),
+                candidate_progression=[strong_default],
+                classification_level=4 if level < 4 else level,
+                agent="Strong Agent",
+                mock_mode=is_mock,
+                selected_mode="strong",
+                reasoning_effort="high",
+                actual_provider=actual_prov,
+                actual_model=strong_default,
+                fallback_status="prohibited_in_strong_mode",
+            )
+
+        # -------------------------------------------------------------
+        # PRIORITY 3: Explicit Fast Mode Override
+        # -------------------------------------------------------------
+        if resolved_mode == GatewayMode.FAST or policy_name == "always_cheap" or strategy == "always_cheap":
+            cheap_meta = self.registry.get_model(cheap_default)
+            actual_prov = (
+                weak_cfg.provider
+                if (weak_cfg and weak_cfg.provider)
+                else (cheap_meta.provider if cheap_meta else "mock")
+            )
+            is_mock = actual_prov == "mock" or "mock" in cheap_default.lower()
+            if is_mock:
+                actual_prov = "mock"
+            return RoutingDecision(
+                policy_name="fast" if resolved_mode == GatewayMode.FAST else "always_cheap",
                 policy_version=self.policy_version,
                 tier="cheap",
                 selected_model_alias=cheap_default,
-                selected_provider=provider,
-                reason_code="POLICY_FORCED_CHEAP",
-                reason_message="Caller forced cheap tier",
+                selected_provider=actual_prov,
+                reason_code="EXPLICIT_FAST_MODE" if resolved_mode == GatewayMode.FAST else "POLICY_FORCED_CHEAP",
+                reason_message="Explicit Fast Mode selected: cost-effective fast tier prioritized."
+                if resolved_mode == GatewayMode.FAST
+                else "Caller forced cheap tier",
                 feature_summary=feature_summary,
                 complexity=complexity,
-                strategy=strategy,
+                strategy=strategy or "cost_optimized",
                 task_category=profile.category.value,
                 alternative_eligible_models=[
                     m.alias for m in self.registry.get_by_tier("cheap") if m.alias != cheap_default
@@ -113,32 +226,12 @@ class DeterministicRouter:
                 candidate_progression=[cheap_default, strong_default],
                 classification_level=1,
                 agent="Weak Agent",
-                mock_mode=False,
-            )
-
-        if policy_name == "always_strong" or strategy == "always_strong":
-            strong_meta = self.registry.get_model(strong_default)
-            provider = strong_meta.provider if strong_meta else "mock"
-            return RoutingDecision(
-                policy_name="always_strong",
-                policy_version=self.policy_version,
-                tier="strong",
-                selected_model_alias=strong_default,
-                selected_provider=provider,
-                reason_code="POLICY_FORCED_STRONG",
-                reason_message="Caller forced strong tier",
-                feature_summary=feature_summary,
-                complexity=complexity,
-                strategy=strategy,
-                task_category=profile.category.value,
-                alternative_eligible_models=[
-                    m.alias for m in self.registry.get_by_tier("strong") if m.alias != strong_default
-                ],
-                estimated_cost=self._estimate_cost(strong_default, features.estimated_tokens),
-                candidate_progression=[strong_default, cheap_default],
-                classification_level=3,
-                agent="Strong Agent",
-                mock_mode=False,
+                mock_mode=is_mock,
+                selected_mode="fast",
+                reasoning_effort="none",
+                actual_provider=actual_prov,
+                actual_model=cheap_default,
+                fallback_status="not_triggered",
             )
 
         if strategy == "manual" and options.manual_model:
@@ -383,12 +476,17 @@ class DeterministicRouter:
         alternative_eligible_models = [m.alias for m in candidates_to_score if m.alias != selected_model.alias]
         estimated_cost = self._estimate_cost(selected_model.alias, features.estimated_tokens)
 
+        is_mock = (selected_model.provider == "mock") or ("mock" in selected_model.alias.lower())
+        actual_prov = "mock" if is_mock else selected_model.provider
+        eff_mode = resolved_mode.value if resolved_mode else "auto"
+        effort = "high" if selected_model.tier == "strong" else "none"
+
         return RoutingDecision(
             policy_name=policy_name,
             policy_version=self.policy_version,
             tier=selected_model.tier,
             selected_model_alias=selected_model.alias,
-            selected_provider=selected_model.provider,
+            selected_provider=actual_prov,
             reason_code=reason_code,
             reason_message=reason_message,
             feature_summary=feature_summary,
@@ -403,7 +501,13 @@ class DeterministicRouter:
             agentic_plan=agentic_plan.to_summary(),
             classification_level=level,
             agent="Weak Agent" if selected_model.tier == "cheap" else "Strong Agent",
-            mock_mode=False,
+            mock_mode=is_mock,
+            selected_mode=eff_mode,
+            reasoning_effort=effort,
+            actual_provider=actual_prov,
+            actual_model=selected_model.alias,
+            routing_reason=reason_message,
+            fallback_status="not_triggered",
         )
 
     def _estimate_cost(self, model_alias: str, input_tokens: int) -> Optional[float]:

@@ -105,6 +105,17 @@ class ProviderUnavailableError(GatewayError):
         )
 
 
+class StrongModelUnavailableError(GatewayError):
+    def __init__(self, message: str = "Strong model is unavailable", trace_id: Optional[str] = None):
+        super().__init__(
+            message=message,
+            error_type="strong_model_unavailable",
+            status_code=503,
+            retryable=False,
+            trace_id=trace_id,
+        )
+
+
 class ForbiddenError(GatewayError):
     def __init__(self, message: str = "Access forbidden", trace_id: Optional[str] = None):
         super().__init__(

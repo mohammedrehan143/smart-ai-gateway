@@ -43,10 +43,18 @@ class AgentTestRequest(BaseModel):
 
 class GatewayExecuteRequest(BaseModel):
     prompt: str = Field(..., min_length=1, description="User prompt to classify, route, and execute")
-    mode: Literal["adaptive", "weak", "strong"] = Field("adaptive", description="Routing mode: adaptive, weak, strong")
+    mode: Optional[str] = Field(
+        "auto", description="Routing mode: auto, fast, balanced, strong, expert (or legacy adaptive, weak)"
+    )
     temperature: Optional[float] = Field(None, ge=0.0, le=2.0)
     max_tokens: Optional[int] = Field(None, ge=1)
     conversation_history: Optional[List[Dict[str, str]]] = Field(None, description="Multi-turn conversation context")
+    tools: Optional[List[Dict[str, Any]]] = Field(None, description="Optional tools for agent orchestration")
+
+
+class SessionModeRequest(BaseModel):
+    mode: str = Field(..., description="Mode to set: auto, fast, balanced, strong, expert")
+    user_id: Optional[str] = Field(None, description="Optional target user ID")
 
 
 def _resolve_effective_user(user: AuthenticatedUser, x_user_id: Optional[str]) -> str:
@@ -161,6 +169,45 @@ async def delete_agent_configuration(
     }
 
 
+@router.post(
+    "/api/agents/mode",
+    status_code=status.HTTP_200_OK,
+    summary="Configure persistent routing mode for user session (Auto, Fast, Balanced, Strong, Expert)",
+)
+async def set_session_mode(
+    payload: SessionModeRequest,
+    user: AuthenticatedUser = Depends(get_authenticated_user),
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+) -> Dict[str, Any]:
+    target_user = payload.user_id if (user.is_admin and payload.user_id) else _resolve_effective_user(user, x_user_id)
+    saved = default_credential_manager.set_session_mode(target_user, payload.mode)
+    return {
+        "status": "success",
+        "user_id": target_user,
+        "mode": saved,
+        "selected_mode": saved,
+    }
+
+
+@router.get(
+    "/api/agents/mode",
+    status_code=status.HTTP_200_OK,
+    summary="Get current persistent routing mode for user session",
+)
+async def get_session_mode(
+    user_id: Optional[str] = Query(None, description="Target user ID"),
+    user: AuthenticatedUser = Depends(get_authenticated_user),
+    x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+) -> Dict[str, Any]:
+    target_user = user_id if (user.is_admin and user_id) else _resolve_effective_user(user, x_user_id)
+    current = default_credential_manager.get_session_mode(target_user) or "auto"
+    return {
+        "user_id": target_user,
+        "mode": current,
+        "selected_mode": current,
+    }
+
+
 # ---------------------------------------------------------------------------
 # 2. Real Gateway Execution Endpoints (/api/gateway)
 # ---------------------------------------------------------------------------
@@ -175,15 +222,20 @@ async def execute_gateway_prompt(
     payload: GatewayExecuteRequest,
     user: AuthenticatedUser = Depends(get_authenticated_user),
     x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_gateway_mode: Optional[str] = Header(None, alias="X-Gateway-Mode"),
 ) -> Dict[str, Any]:
     effective_user = _resolve_effective_user(user, x_user_id)
+    req_mode = payload.mode
+    if (not req_mode or req_mode in ("auto", "adaptive")) and x_gateway_mode:
+        req_mode = x_gateway_mode
     res = await default_execution_engine.execute_prompt(
         user_id=effective_user,
         prompt=payload.prompt,
-        mode=payload.mode,
+        mode=req_mode or "auto",
         conversation_history=payload.conversation_history,
         temperature=payload.temperature,
         max_tokens=payload.max_tokens,
+        tools=payload.tools,
     )
     return res.to_dict()
 
@@ -196,12 +248,16 @@ async def stream_gateway_prompt(
     payload: GatewayExecuteRequest,
     user: AuthenticatedUser = Depends(get_authenticated_user),
     x_user_id: Optional[str] = Header(None, alias="X-User-ID"),
+    x_gateway_mode: Optional[str] = Header(None, alias="X-Gateway-Mode"),
 ):
     effective_user = _resolve_effective_user(user, x_user_id)
+    req_mode = payload.mode
+    if (not req_mode or req_mode in ("auto", "adaptive")) and x_gateway_mode:
+        req_mode = x_gateway_mode
     generator = default_execution_engine.stream_prompt(
         user_id=effective_user,
         prompt=payload.prompt,
-        mode=payload.mode,
+        mode=req_mode or "auto",
         conversation_history=payload.conversation_history,
         temperature=payload.temperature,
         max_tokens=payload.max_tokens,

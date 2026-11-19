@@ -1098,25 +1098,39 @@
         <div class="sidebar-section-title">Routing Engine</div>
         <div class="sidebar-mode-selector">
             <div class="mode-chips">
-                <button class="mode-chip-btn active mode-adaptive" id="mode-btn-adaptive" onclick="setRoutingMode('adaptive')">
+                <button class="mode-chip-btn active mode-adaptive" id="mode-btn-auto" onclick="setRoutingMode('auto')">
                     <span>🤖</span>
                     <div>
-                        <div>Adaptive Router</div>
-                        <div style="font-size: 0.68rem; color: var(--text-muted);">Dynamic auto-routing</div>
+                        <div>Auto Mode</div>
+                        <div style="font-size: 0.68rem; color: var(--text-muted);">Dynamic classification</div>
                     </div>
                 </button>
-                <button class="mode-chip-btn mode-weak" id="mode-btn-weak" onclick="setRoutingMode('weak')">
+                <button class="mode-chip-btn mode-weak" id="mode-btn-fast" onclick="setRoutingMode('fast')">
                     <span>🟢</span>
                     <div>
-                        <div>Weak Agent Only</div>
-                        <div style="font-size: 0.68rem; color: var(--text-muted);">Low-cost lightweight</div>
+                        <div>Fast Mode</div>
+                        <div style="font-size: 0.68rem; color: var(--text-muted);">Weak agent / low cost</div>
+                    </div>
+                </button>
+                <button class="mode-chip-btn mode-adaptive" id="mode-btn-balanced" onclick="setRoutingMode('balanced')">
+                    <span>⚖️</span>
+                    <div>
+                        <div>Balanced Mode</div>
+                        <div style="font-size: 0.68rem; color: var(--text-muted);">Optimal trade-off</div>
                     </div>
                 </button>
                 <button class="mode-chip-btn mode-strong" id="mode-btn-strong" onclick="setRoutingMode('strong')">
                     <span>🟣</span>
                     <div>
-                        <div>Strong Agent Only</div>
-                        <div style="font-size: 0.68rem; color: var(--text-muted);">Deep reasoning & code</div>
+                        <div>Strong Mode</div>
+                        <div style="font-size: 0.68rem; color: var(--text-muted);">Enforced deep reasoning</div>
+                    </div>
+                </button>
+                <button class="mode-chip-btn mode-strong" id="mode-btn-expert" onclick="setRoutingMode('expert')">
+                    <span>⚡</span>
+                    <div>
+                        <div>Expert Mode</div>
+                        <div style="font-size: 0.68rem; color: var(--text-muted);">Frontier & verification</div>
                     </div>
                 </button>
             </div>
@@ -1467,19 +1481,34 @@
 
             const navBadge = document.getElementById('nav-mode-badge');
             const navText = document.getElementById('nav-mode-text');
-            if (mode === 'adaptive') {
+            if (mode === 'auto') {
                 navBadge.className = 'badge-pill adaptive';
-                navBadge.innerText = '🤖 Adaptive';
-                navText.innerText = 'Auto-Routing';
-            } else if (mode === 'weak') {
+                navBadge.innerText = '🤖 Auto';
+                navText.innerText = 'Smart Adaptive Routing';
+            } else if (mode === 'fast') {
                 navBadge.className = 'badge-pill weak';
-                navBadge.innerText = '🟢 Weak Only';
-                navText.innerText = 'Low-Cost Tier';
+                navBadge.innerText = '⚡ Fast';
+                navText.innerText = 'Speed & Cost Optimized';
+            } else if (mode === 'balanced') {
+                navBadge.className = 'badge-pill weak';
+                navBadge.innerText = '⚖️ Balanced';
+                navText.innerText = 'Optimal Quality & Cost';
             } else if (mode === 'strong') {
                 navBadge.className = 'badge-pill strong';
-                navBadge.innerText = '🟣 Strong Only';
-                navText.innerText = 'Deep Reasoning';
+                navBadge.innerText = '🟣 Strong';
+                navText.innerText = 'Deep Reasoning & Tools';
+            } else if (mode === 'expert') {
+                navBadge.className = 'badge-pill strong';
+                navBadge.innerText = '👑 Expert';
+                navText.innerText = 'Maximum Reasoning Effort';
             }
+
+            // Persist session mode via backend endpoint
+            fetch('/api/agents/mode', {
+                method: 'POST',
+                headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ mode: mode })
+            }).catch(e => console.warn('Could not persist session mode:', e));
         }
 
         // Auto-Resize Textarea
@@ -1737,15 +1766,30 @@
                 if (routingMeta || usageMeta) {
                     slot.detailsWrapper.style.display = 'block';
                     const tokens = usageMeta && usageMeta.tokens ? usageMeta.tokens : {};
+                    const selectedMode = (routingMeta && routingMeta.selected_mode) || (usageMeta && usageMeta.selected_mode) || currentMode || 'auto';
+                    const routingReason = (routingMeta && routingMeta.reason) || (routingMeta && routingMeta.routing_reason) || 'Automated dispatch';
+                    const actualProvider = (routingMeta && routingMeta.actual_provider) || (usageMeta && usageMeta.actual_provider) || (routingMeta && routingMeta.provider) || 'unknown';
+                    const actualModel = (routingMeta && routingMeta.actual_model) || (usageMeta && usageMeta.actual_model) || (routingMeta && routingMeta.model) || 'unknown';
+                    const reasoningEffort = (routingMeta && routingMeta.reasoning_effort) || (usageMeta && usageMeta.reasoning_effort) || 'standard';
+                    const fallbackStatus = (routingMeta && routingMeta.fallback_status) || (usageMeta && usageMeta.fallback_status) || 'none';
+                    const isMock = routingMeta ? Boolean(routingMeta.mock_mode) : false;
+
                     slot.detailsWrapper.innerHTML = `
                         <button class="routing-details-toggle" onclick="toggleDetails(this)">
                             <span>▸</span>
                             <span>Routing Intelligence Details</span>
                         </button>
-                        <div class="routing-details-content" style="display:none;">
-                            <div><strong>Routing Decision:</strong> ${routingMeta ? routingMeta.reason : 'Automated dispatch'}</div>
-                            <div class="routing-details-stats">
+                        <div class="routing-details-content" style="display:none; flex-direction:column; gap:6px;">
+                            <div><strong>Routing Decision:</strong> ${escapeHtml(routingReason)}</div>
+                            <div class="routing-details-stats" style="display:flex; flex-wrap:wrap; gap:12px;">
+                                <span>Mode: <strong style="text-transform:uppercase;">${escapeHtml(selectedMode)}</strong></span>
                                 <span>Complexity: <strong>${routingMeta ? routingMeta.complexity : 1}/5</strong></span>
+                                <span>Effort: <strong>${escapeHtml(reasoningEffort)}</strong></span>
+                                <span>Provider: <strong>${escapeHtml(actualProvider)}</strong>${isMock ? ' (Mock)' : ''}</span>
+                                <span>Model: <strong>${escapeHtml(actualModel)}</strong></span>
+                                <span>Fallback: <strong>${escapeHtml(fallbackStatus)}</strong></span>
+                            </div>
+                            <div class="routing-details-stats">
                                 <span>Confidence: <strong>${routingMeta ? Math.round((routingMeta.confidence || 1) * 100) : 100}%</strong></span>
                                 <span>Tokens: In: <strong>${tokens.prompt || 0}</strong> • Out: <strong>${tokens.completion || 0}</strong> • Total: <strong>${tokens.total || 0}</strong></span>
                             </div>

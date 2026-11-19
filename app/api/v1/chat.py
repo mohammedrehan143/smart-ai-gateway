@@ -31,6 +31,7 @@ async def create_chat_completion(
     request: ChatCompletionRequest,
     user: AuthenticatedUser = Depends(get_authenticated_user),
     x_request_id: Optional[str] = Header(None, alias="X-Request-ID"),
+    x_gateway_mode: Optional[str] = Header(None, alias="X-Gateway-Mode"),
     orchestrator: ChatOrchestrator = Depends(get_orchestrator),
 ) -> Union[ChatCompletionResponse, StreamingResponse]:
     """Public chat generation endpoint supporting standard JSON and SSE streaming."""
@@ -39,6 +40,10 @@ async def create_chat_completion(
         request.routing.user_id = user.user_id
     if not request.user or not user.is_admin:
         request.user = user.user_id
+
+    # Handle explicit mode header
+    if x_gateway_mode and not request.routing.mode and not request.mode:
+        request.routing.mode = x_gateway_mode
     if request.stream:
 
         async def event_generator():

@@ -140,6 +140,160 @@ class ModelRegistry:
                 reliability_score=0.995,
                 is_active=True,
             ),
+            "claude-3-5-sonnet": ModelMetadata(
+                alias="claude-3-5-sonnet",
+                provider="anthropic",
+                upstream_model_id="claude-3-5-sonnet-20241022",
+                tier="strong",
+                context_window=200000,
+                max_output_tokens=8192,
+                quality_tier=4,
+                quality_score=0.99,
+                latency_tier="standard",
+                supports_tools=True,
+                supports_json=True,
+                capabilities=[
+                    "chat",
+                    "general_knowledge",
+                    "qa",
+                    "summarization",
+                    "code_simple",
+                    "code_complex",
+                    "debugging",
+                    "architecture",
+                    "deep_reasoning",
+                    "security_analysis",
+                    "structured_writing",
+                ],
+                input_rate_per_million=3.00,
+                output_rate_per_million=15.00,
+                reliability_score=0.995,
+                is_active=True,
+            ),
+            "gemini-1.5-flash": ModelMetadata(
+                alias="gemini-1.5-flash",
+                provider="google",
+                upstream_model_id="gemini-1.5-flash",
+                tier="cheap",
+                context_window=1000000,
+                max_output_tokens=8192,
+                quality_tier=2,
+                quality_score=0.85,
+                latency_tier="fast",
+                supports_tools=True,
+                supports_json=True,
+                capabilities=["chat", "general_knowledge", "qa", "summarization", "code_simple", "structured_writing"],
+                input_rate_per_million=0.075,
+                output_rate_per_million=0.30,
+                reliability_score=0.998,
+                is_active=True,
+            ),
+            "llama-3.1-8b-instant": ModelMetadata(
+                alias="llama-3.1-8b-instant",
+                provider="groq",
+                upstream_model_id="llama-3.1-8b-instant",
+                tier="cheap",
+                context_window=128000,
+                max_output_tokens=8192,
+                quality_tier=2,
+                quality_score=0.80,
+                latency_tier="fast",
+                supports_tools=True,
+                supports_json=True,
+                capabilities=["chat", "general_knowledge", "qa", "summarization", "code_simple", "structured_writing"],
+                input_rate_per_million=0.05,
+                output_rate_per_million=0.08,
+                reliability_score=0.997,
+                is_active=True,
+            ),
+            "llama-3.3-70b-versatile": ModelMetadata(
+                alias="llama-3.3-70b-versatile",
+                provider="groq",
+                upstream_model_id="llama-3.3-70b-versatile",
+                tier="strong",
+                context_window=128000,
+                max_output_tokens=8192,
+                quality_tier=3,
+                quality_score=0.93,
+                latency_tier="fast",
+                supports_tools=True,
+                supports_json=True,
+                capabilities=[
+                    "chat",
+                    "general_knowledge",
+                    "qa",
+                    "summarization",
+                    "code_simple",
+                    "code_complex",
+                    "debugging",
+                    "architecture",
+                    "deep_reasoning",
+                    "structured_writing",
+                ],
+                input_rate_per_million=0.59,
+                output_rate_per_million=0.79,
+                reliability_score=0.995,
+                is_active=True,
+            ),
+            "deepseek-r1-distill-llama-70b": ModelMetadata(
+                alias="deepseek-r1-distill-llama-70b",
+                provider="groq",
+                upstream_model_id="deepseek-r1-distill-llama-70b",
+                tier="strong",
+                context_window=128000,
+                max_output_tokens=8192,
+                quality_tier=4,
+                quality_score=0.97,
+                latency_tier="standard",
+                supports_tools=True,
+                supports_json=True,
+                capabilities=[
+                    "chat",
+                    "general_knowledge",
+                    "qa",
+                    "summarization",
+                    "code_simple",
+                    "code_complex",
+                    "debugging",
+                    "architecture",
+                    "deep_reasoning",
+                    "security_analysis",
+                    "structured_writing",
+                ],
+                input_rate_per_million=0.59,
+                output_rate_per_million=0.79,
+                reliability_score=0.992,
+                is_active=True,
+            ),
+            "openai/gpt-oss-120b": ModelMetadata(
+                alias="openai/gpt-oss-120b",
+                provider="groq",
+                upstream_model_id="openai/gpt-oss-120b",
+                tier="strong",
+                context_window=128000,
+                max_output_tokens=8192,
+                quality_tier=3,
+                quality_score=0.91,
+                latency_tier="fast",
+                supports_tools=True,
+                supports_json=True,
+                capabilities=[
+                    "chat",
+                    "general_knowledge",
+                    "qa",
+                    "summarization",
+                    "code_simple",
+                    "code_complex",
+                    "debugging",
+                    "architecture",
+                    "deep_reasoning",
+                    "structured_writing",
+                ],
+                input_rate_per_million=0.15,
+                output_rate_per_million=0.60,
+                reliability_score=0.994,
+                is_active=True,
+            ),
         }
 
     def get_model(self, alias: str) -> Optional[ModelMetadata]:
@@ -152,10 +306,16 @@ class ModelRegistry:
         return list(self._models.values())
 
     def get_by_tier(self, tier: Literal["cheap", "strong"], provider: Optional[str] = None) -> List[ModelMetadata]:
+        from app.providers.resolver import is_mock_mode_explicitly_enabled
+
+        mock_active = is_mock_mode_explicitly_enabled()
         return [
             m
             for m in self._models.values()
-            if m.tier == tier and (provider is None or m.provider == provider) and m.is_active
+            if m.tier == tier
+            and (provider is None or m.provider == provider)
+            and (not mock_active or provider is not None or m.provider == "mock")
+            and m.is_active
         ]
 
     def filter_eligible_models(
@@ -166,11 +326,16 @@ class ModelRegistry:
         provider: Optional[str] = None,
     ) -> List[ModelMetadata]:
         """Finds all active models that satisfy task requirements."""
+        from app.providers.resolver import is_mock_mode_explicitly_enabled
+
+        mock_active = is_mock_mode_explicitly_enabled()
         req_caps = required_capabilities or set()
         eligible: List[ModelMetadata] = []
 
         for m in self._models.values():
             if not m.is_active:
+                continue
+            if mock_active and not provider and m.provider != "mock":
                 continue
             if provider and m.provider != provider:
                 continue

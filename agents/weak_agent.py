@@ -26,6 +26,11 @@ class AgentExecutionResult:
     cost: float
     finish_reason: str = "stop"
     raw_response: Optional[Dict[str, Any]] = None
+    reasoning_effort: Optional[str] = "none"
+    plan: Optional[Dict[str, Any]] = None
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+    verification: Optional[Dict[str, Any]] = None
+    is_mock: bool = False
 
 
 class WeakAgent:
@@ -100,11 +105,13 @@ class WeakAgent:
         )
 
         cost = self.calculate_cost(response.prompt_tokens, response.completion_tokens, config.model_id)
+        is_mock = (config.provider == "mock") or ("mock" in config.model_id.lower())
+        actual_provider = "mock" if is_mock else config.provider
 
         return AgentExecutionResult(
             agent=self.AGENT_TYPE,
             content=response.content,
-            provider=config.provider,
+            provider=actual_provider,
             model=config.model_id,
             prompt_tokens=response.prompt_tokens,
             completion_tokens=response.completion_tokens,
@@ -113,6 +120,8 @@ class WeakAgent:
             cost=cost,
             finish_reason=response.finish_reason,
             raw_response=response.raw_response,
+            reasoning_effort="none",
+            is_mock=is_mock,
         )
 
     async def stream_execute(

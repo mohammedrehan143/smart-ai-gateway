@@ -46,6 +46,8 @@ class ProviderResponse:
     latency_ms: int
     finish_reason: str = "stop"
     raw_response: Dict[str, Any] = field(default_factory=dict)
+    tool_calls: Optional[List[Dict[str, Any]]] = None
+    reasoning_effort: Optional[str] = None
 
 
 class ProviderManager:
@@ -133,6 +135,14 @@ class ProviderManager:
     ) -> Dict[str, Any]:
         """Runs a minimal connectivity and credential verification probe."""
         start = time.time()
+        if provider.lower().strip() == "mock":
+            return {
+                "success": True,
+                "latency_ms": 1,
+                "message": f"Successfully verified connection to mock ({model_id})",
+                "sample_response": "Mock probe ok",
+            }
+
         test_messages = [{"role": "user", "content": "Ping"}]
         try:
             res = await self.execute(
@@ -171,6 +181,8 @@ class ProviderManager:
         base_url: Optional[str] = None,
         timeout_seconds: Optional[float] = None,
         max_attempts: Optional[int] = None,
+        reasoning_effort: Optional[str] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
     ) -> ProviderResponse:
         """Executes a real prompt completion with exponential backoff and circuit breaker tracking."""
         p = provider.lower().strip()
@@ -188,6 +200,8 @@ class ProviderManager:
                     max_tokens=max_tokens,
                     base_url=base_url,
                     timeout_seconds=timeout_seconds,
+                    reasoning_effort=reasoning_effort,
+                    tools=tools,
                 )
                 default_circuit_registry.record_outcome(model_id, success=True)
                 return resp
@@ -221,6 +235,8 @@ class ProviderManager:
         max_tokens: int = 1024,
         base_url: Optional[str] = None,
         timeout_seconds: Optional[float] = None,
+        reasoning_effort: Optional[str] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
     ) -> ProviderResponse:
         start_time = time.time()
         timeout = timeout_seconds or self.default_timeout_s
@@ -230,6 +246,28 @@ class ProviderManager:
         formatted_messages = list(messages)
         if not has_system:
             formatted_messages = [{"role": "system", "content": GATEWAY_SYSTEM_PROMPT}] + formatted_messages
+
+        if provider == "mock":
+            last_user_msg = ""
+            for m in reversed(messages):
+                if m.get("role") == "user":
+                    last_user_msg = m.get("content", "")
+                    break
+            elapsed_ms = int((time.time() - start_time) * 1000)
+            p_tokens = max(1, len(last_user_msg.split()) * 2)
+            c_tokens = 40
+            return ProviderResponse(
+                content=f"[Mock Response ({model_id})] Deterministic mock completion for: {last_user_msg[:60]}",
+                prompt_tokens=p_tokens,
+                completion_tokens=c_tokens,
+                total_tokens=p_tokens + c_tokens,
+                model=model_id,
+                provider="mock",
+                latency_ms=max(1, elapsed_ms),
+                finish_reason="stop",
+                raw_response={"mock": True, "model": model_id},
+                reasoning_effort=reasoning_effort,
+            )
 
         if provider == "anthropic" and "api.anthropic.com" in resolved_base:
             return await self._execute_anthropic_native(
@@ -259,14 +297,20 @@ class ProviderManager:
             "messages": formatted_messages,
             "stream": False,
         }
+        if tools:
+            payload["tools"] = tools
+
+        eff = reasoning_effort or ("high" if is_modern_or_reasoning else None)
         if is_modern_or_reasoning:
             payload["max_completion_tokens"] = max_tokens
-            if "gpt-oss" in model_id.lower() or "openai/" in model_id.lower():
-                payload["reasoning_effort"] = "medium"
+            if eff:
+                payload["reasoning_effort"] = eff
             if temperature is not None:
                 payload["temperature"] = temperature
         else:
             payload["max_tokens"] = max_tokens
+            if eff:
+                payload["reasoning_effort"] = eff
             if temperature is not None:
                 payload["temperature"] = temperature
 
@@ -296,6 +340,7 @@ class ProviderManager:
         raw_content = first_msg.get("content") or ""
         content = sanitize_llm_response(raw_content)
         finish_reason = choices[0].get("finish_reason", "stop")
+        tool_calls = first_msg.get("tool_calls")
         usage = data.get("usage", {})
         prompt_tokens = usage.get("prompt_tokens", 0)
         completion_tokens = usage.get("completion_tokens", 0)
@@ -312,6 +357,8 @@ class ProviderManager:
             latency_ms=latency_ms,
             finish_reason=finish_reason,
             raw_response=data,
+            tool_calls=tool_calls,
+            reasoning_effort=eff,
         )
 
     async def _execute_anthropic_native(
@@ -387,6 +434,16 @@ class ProviderManager:
         timeout_seconds: Optional[float] = None,
     ) -> AsyncGenerator[Dict[str, Any], None]:
         p = provider.lower().strip()
+        if p == "mock":
+            tokens = ["Mock ", "streaming ", "completion ", "for ", "model ", model_id]
+            for tok in tokens:
+                await asyncio.sleep(0.01)
+                yield {
+                    "choices": [{"delta": {"content": tok}, "index": 0, "finish_reason": None}],
+                    "model": model_id,
+                }
+            return
+
         timeout = timeout_seconds or self.default_timeout_s
         resolved_base = self.resolve_base_url(p, base_url)
         url = f"{resolved_base}/chat/completions"

@@ -96,6 +96,25 @@ def chat_cmd(
             conversation.clear()
             console.print(f"{CHAT_INDENT}[bold green]✔[/bold green] Conversation history cleared.")
             continue
+        elif user_input.startswith("/mode"):
+            parts = user_input.split()
+            valid_modes = ("auto", "fast", "balanced", "strong", "expert")
+            if len(parts) > 1 and parts[1].lower() in valid_modes:
+                chosen_mode = parts[1].lower()
+                if chosen_mode == "strong":
+                    active_policy = "always_strong"
+                elif chosen_mode in ("fast", "weak"):
+                    active_policy = "always_cheap"
+                else:
+                    active_policy = "adaptive"
+                console.print(
+                    f"{CHAT_INDENT}[bold green]✔[/bold green] Switched gateway mode to: [bold magenta]{chosen_mode.upper()}[/bold magenta] (policy: [yellow]{active_policy}[/yellow])"
+                )
+            else:
+                console.print(
+                    f"{CHAT_INDENT}[bold yellow]▲[/bold yellow] Usage: /mode <auto | fast | balanced | strong | expert>"
+                )
+            continue
         elif user_input.startswith("/policy"):
             parts = user_input.split()
             valid_policies = (

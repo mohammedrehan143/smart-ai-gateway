@@ -25,6 +25,9 @@ class RoutingSchema(BaseModel):
         "performance_optimized",
         "manual",
     ] = "adaptive"
+    mode: Optional[str] = Field(
+        None, description="Explicit mode override: auto, fast, balanced, strong, expert"
+    )
     preference: Optional[str] = "balanced"
     strategy: Optional[Literal["cost_optimized", "balanced", "quality_first", "performance_optimized", "manual"]] = None
     quality_threshold: Optional[float] = None
@@ -50,6 +53,9 @@ class ChatCompletionRequest(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
     stream: bool = False
     user: Optional[str] = None
+    mode: Optional[str] = Field(
+        None, description="Top-level explicit mode override: auto, fast, balanced, strong, expert"
+    )
 
 
 class ChoiceMessage(BaseModel):
@@ -69,6 +75,7 @@ class UsageSchema(BaseModel):
     output_tokens: int = 0
     total_tokens: int = 0
     cost_estimate: Optional[float] = None
+    estimated_cost: Optional[float] = None
     currency: str = "USD"
     cost_status: Literal["calculated", "estimated", "unavailable"] = "unavailable"
 
@@ -91,6 +98,13 @@ class RoutingDecisionSchema(BaseModel):
     classification_level: Optional[int] = 1
     agent: Optional[str] = "Weak Agent"
     mock_mode: Optional[bool] = False
+    selected_mode: Optional[str] = "auto"
+    routing_reason: Optional[str] = None
+    actual_provider: Optional[str] = None
+    actual_model: Optional[str] = None
+    reasoning_effort: Optional[str] = None
+    fallback_status: Optional[str] = "not_triggered"
+    token_usage: Optional[Dict[str, int]] = None
 
 
 class ChatCompletionResponse(BaseModel):

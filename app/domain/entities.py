@@ -35,6 +35,7 @@ class RoutingOptions:
     user_id: str = "default_user"
     project_id: str = "default_project"
     max_cost_limit: Optional[float] = None
+    mode: Optional[str] = None  # auto, fast, balanced, strong, expert
 
 
 @dataclass
@@ -67,6 +68,14 @@ class RoutingDecision:
     classification_level: int = 1
     agent: str = "Weak Agent"
     mock_mode: bool = False
+    selected_mode: str = "auto"
+    routing_reason: Optional[str] = None
+    actual_provider: Optional[str] = None
+    actual_model: Optional[str] = None
+    reasoning_effort: str = "none"
+    fallback_status: str = "not_triggered"
+    token_usage: Optional[Dict[str, int]] = None
+    latency_ms: Optional[int] = None
 
 
 @dataclass
