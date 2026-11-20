@@ -14,7 +14,7 @@ from agents.strong_agent import StrongAgent, default_strong_agent
 from agents.weak_agent import AgentExecutionResult, WeakAgent, default_weak_agent
 from app.api.deps import get_repository
 from app.core.config import settings
-from app.core.errors import InvalidRequestError
+from app.core.errors import InvalidRequestError, StrongModelUnavailableError
 from app.core.logging import get_logger
 from app.domain.entities import (
     GatewayRequestRecord,
@@ -186,7 +186,9 @@ class ExecutionEngine:
                 else:
                     total_latency_ms = int((time.time() - start_time) * 1000)
                     routing_dict = decision.to_dict()
-                    routing_dict["fallback_status"] = "prohibited_in_strong_mode" if is_strong_override else "unconfigured_strong_agent"
+                    routing_dict["fallback_status"] = (
+                        "prohibited_in_strong_mode" if is_strong_override else "unconfigured_strong_agent"
+                    )
                     err_resp = GatewayExecutionResponse(
                         id=req_id,
                         prompt=prompt,
@@ -212,7 +214,6 @@ class ExecutionEngine:
                     await self._record_telemetry(user_id, err_resp)
                     return err_resp
 
-        agent_obj = self.weak_agent if chosen_agent_type == "weak" else self.strong_agent
         fallback_agent_obj = self.strong_agent if chosen_agent_type == "weak" else self.weak_agent
         fallback_type: Literal["weak", "strong"] = "strong" if chosen_agent_type == "weak" else "weak"
 
@@ -367,11 +368,7 @@ class ExecutionEngine:
                 return err_resp
 
         # 6. Construct execution response with complete transparency
-        is_mock = (
-            getattr(result, "is_mock", False)
-            or (result.provider == "mock")
-            or ("mock" in result.model.lower())
-        )
+        is_mock = getattr(result, "is_mock", False) or (result.provider == "mock") or ("mock" in result.model.lower())
         actual_prov = "mock" if is_mock else result.provider
         actual_mod = result.model
         fb_status = "fallback_to_strong" if fallback_used else "not_triggered"
@@ -383,9 +380,7 @@ class ExecutionEngine:
         routing_dict["actual_provider"] = actual_prov
         routing_dict["actual_model"] = actual_mod
         routing_dict["selected_mode"] = norm_mode.value
-        routing_dict["reasoning_effort"] = (
-            getattr(result, "reasoning_effort", "none") or decision.reasoning_effort
-        )
+        routing_dict["reasoning_effort"] = getattr(result, "reasoning_effort", "none") or decision.reasoning_effort
 
         total_latency_ms = int((time.time() - start_time) * 1000)
 

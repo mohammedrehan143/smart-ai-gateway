@@ -326,13 +326,14 @@ class CredentialManager:
         config = self.get_agent_config(user_id, agent_type)
         return bool(config and config.is_enabled and config.encrypted_key and config.model_id)
 
-    def validate_agent_config(
-        self, user_id: str, agent_type: Literal["weak", "strong"]
-    ) -> tuple[bool, Optional[str]]:
+    def validate_agent_config(self, user_id: str, agent_type: Literal["weak", "strong"]) -> tuple[bool, Optional[str]]:
         """Validates agent configuration, provider, credentials format, and model settings."""
         cfg = self.get_agent_config(user_id, agent_type)
         if not cfg:
-            return False, f"{agent_type.capitalize()} Agent is not configured. Please configure a provider and API key in Agent Settings."
+            return (
+                False,
+                f"{agent_type.capitalize()} Agent is not configured. Please configure a provider and API key in Agent Settings.",
+            )
         if not cfg.is_enabled:
             return False, f"{agent_type.capitalize()} Agent is currently disabled."
 

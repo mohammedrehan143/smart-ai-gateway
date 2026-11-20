@@ -74,7 +74,10 @@ class MockProviderAdapter(BaseProviderAdapter):
                 content = "Mock completion response: Hello! I am the Smart AI Gateway Assistant. How can I help you today with coding, architecture, or model routing?"
             elif any(w in lower_msg for w in ("who are you", "what are you", "what is your name", "your name?")):
                 content = "Mock completion response: I am the Smart AI Gateway Assistant, an intelligent multi-agent routing and execution platform designed to orchestrate Weak and Strong AI models seamlessly."
-            elif any(w in lower_msg for w in ("website", "landing page", "web page", "create a site", "build a site", "html site")):
+            elif any(
+                w in lower_msg
+                for w in ("website", "landing page", "web page", "create a site", "build a site", "html site")
+            ):
                 content = (
                     "Mock completion response: Here is a complete, modern responsive website.\n\n"
                     "```action:write_file\n"

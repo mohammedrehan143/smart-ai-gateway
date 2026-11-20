@@ -13,10 +13,7 @@ from agents.provider_manager import ProviderManager
 from agents.router import IntelligentRouter
 from agents.strong_agent import StrongAgent
 from agents.weak_agent import WeakAgent
-from app.api.schemas import ChatCompletionRequest
-from app.api.v1.agents_gateway import GatewayExecuteRequest, SessionModeRequest
-from app.core.errors import StrongModelUnavailableError
-from app.domain.entities import ChatMessage, GenerationParameters, RoutingOptions
+from app.domain.entities import ChatMessage, RoutingOptions
 from app.domain.modes import (
     GatewayMode,
     get_reasoning_effort_for_mode,
@@ -27,7 +24,6 @@ from app.domain.modes import (
 )
 from app.domain.router import DeterministicRouter
 from app.main import app
-from app.services.orchestrator import ChatOrchestrator
 
 
 # ==============================================================================
@@ -172,7 +168,12 @@ def test_deterministic_router_mode_override():
     options = RoutingOptions(mode="strong")
 
     decision = router.route(prompt, options=options)
-    assert decision.selected_model_alias in ["mock-strong", "gpt-4o", "claude-3-5-sonnet", "deepseek-r1-distill-llama-70b"]
+    assert decision.selected_model_alias in [
+        "mock-strong",
+        "gpt-4o",
+        "claude-3-5-sonnet",
+        "deepseek-r1-distill-llama-70b",
+    ]
     assert decision.selected_mode == "strong"
     assert decision.reasoning_effort == "high"
 
@@ -310,7 +311,10 @@ def test_strong_agent_orchestration_planning_and_verification():
     )
     assert plan["total_steps"] >= 2
     steps = plan["steps"]
-    assert any("analysis" in s["title"].lower() or "decomposition" in s["title"].lower() or "code" in s["title"].lower() for s in steps)
+    assert any(
+        "analysis" in s["title"].lower() or "decomposition" in s["title"].lower() or "code" in s["title"].lower()
+        for s in steps
+    )
 
     # 2. Local tool execution
     calc_res = strong_agent._execute_local_tool("calculator", {"expression": "25 * 4 + 10"})
@@ -368,7 +372,13 @@ async def test_gateway_response_transparency_metadata():
     # 6. Reasoning effort
     assert data["reasoning_effort"] == "high"
     # 7. Fallback status
-    assert data["fallback_status"] in ["none", "mock_fallback", "downgraded_to_weak", "prohibited_in_strong_mode", "not_triggered"]
+    assert data["fallback_status"] in [
+        "none",
+        "mock_fallback",
+        "downgraded_to_weak",
+        "prohibited_in_strong_mode",
+        "not_triggered",
+    ]
     # 8. Latency
     assert data["latency_ms"] >= 0
     # 9. Token usage
@@ -450,7 +460,10 @@ async def test_chat_completions_with_x_gateway_mode_header():
         assert "routing" in data
         assert data["routing"]["selected_mode"] == "strong"
         assert data["routing"]["reasoning_effort"] == "high"
-        assert data["model"] in ["mock-strong", "gpt-4o", "claude-3-5-sonnet", "deepseek-r1-distill-llama-70b"] or data["routing"]["actual_model"] is not None
+        assert (
+            data["model"] in ["mock-strong", "gpt-4o", "claude-3-5-sonnet", "deepseek-r1-distill-llama-70b"]
+            or data["routing"]["actual_model"] is not None
+        )
 
 
 # ==============================================================================
@@ -481,7 +494,9 @@ def test_auto_mode_subsequent_simple_prompts_route_to_weak():
             conversation_history=history,
             mode="auto",
         )
-        assert decision_simple.agent == "weak", f"Prompt '{simple_prompt}' should route to weak agent but routed to {decision_simple.agent}"
+        assert decision_simple.agent == "weak", (
+            f"Prompt '{simple_prompt}' should route to weak agent but routed to {decision_simple.agent}"
+        )
         assert decision_simple.complexity <= 2
 
 

@@ -7,7 +7,7 @@ strict priority resolution, and provider/model validation.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, Optional, Tuple
 
 
 class GatewayMode(str, Enum):
@@ -134,7 +134,10 @@ def validate_provider_and_model(
             return False, f"API key for provider '{provider}' is too short to be valid."
         k_lower = raw_key.lower()
         if any(dummy in k_lower for dummy in ("dummy", "placeholder", "your_key", "sample_key")):
-            return False, f"API key appears to be a placeholder for provider '{provider}'. Please configure a real API key."
+            return (
+                False,
+                f"API key appears to be a placeholder for provider '{provider}'. Please configure a real API key.",
+            )
 
     if base_url and base_url.strip():
         from app.core.network_security import validate_provider_base_url

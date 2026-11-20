@@ -25,9 +25,7 @@ class RoutingSchema(BaseModel):
         "performance_optimized",
         "manual",
     ] = "adaptive"
-    mode: Optional[str] = Field(
-        None, description="Explicit mode override: auto, fast, balanced, strong, expert"
-    )
+    mode: Optional[str] = Field(None, description="Explicit mode override: auto, fast, balanced, strong, expert")
     preference: Optional[str] = "balanced"
     strategy: Optional[Literal["cost_optimized", "balanced", "quality_first", "performance_optimized", "manual"]] = None
     quality_threshold: Optional[float] = None

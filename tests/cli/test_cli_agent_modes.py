@@ -248,7 +248,9 @@ def test_user_scenario_login_page_creation(tmp_path, monkeypatch):
     monkeypatch.setattr(GatewayClient, "chat", mock_chat)
     monkeypatch.chdir(tmp_path)
 
-    res = runner.invoke(app, ["ask", "create a login page for me in this folder name the file as login.htmla nd save it in this folder"])
+    res = runner.invoke(
+        app, ["ask", "create a login page for me in this folder name the file as login.htmla nd save it in this folder"]
+    )
     assert res.exit_code == 0
     assert target_file.exists()
     assert "<!DOCTYPE html>" in target_file.read_text(encoding="utf-8")

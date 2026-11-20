@@ -10,7 +10,7 @@ from agents.credential_manager import CredentialManager, default_credential_mana
 from agents.provider_manager import ProviderManager, ProviderResponse, default_provider_manager
 from agents.weak_agent import AgentExecutionResult
 from app.core.cost import default_cost_calculator
-from app.core.errors import InvalidRequestError, StrongModelUnavailableError
+from app.core.errors import StrongModelUnavailableError
 from app.core.logging import get_logger
 
 logger = get_logger("agents.strong_agent")
@@ -68,9 +68,7 @@ class StrongAgent:
             completion_tokens * (self.DEFAULT_OUTPUT_RATE / 1_000_000.0)
         )
 
-    def plan_task(
-        self, prompt: str, conversation_history: Optional[List[Dict[str, str]]] = None
-    ) -> Dict[str, Any]:
+    def plan_task(self, prompt: str, conversation_history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
         """Multi-step planning capability decomposing complex requests into execution steps."""
         is_coding = bool(
             re.search(
@@ -138,7 +136,29 @@ class StrongAgent:
             except Exception as e:
                 return {"ok": False, "error": str(e)}
 
-        elif name_clean in ("write_file", "edit_file", "read_file", "list_directory", "run_command"):
+        elif name_clean in (
+            "write_file",
+            "edit_file",
+            "read_file",
+            "delete_file",
+            "rename_file",
+            "move_file",
+            "copy_file",
+            "create_directory",
+            "delete_directory",
+            "list_directory",
+            "find_files",
+            "search_in_files",
+            "rollback_file",
+            "get_file_diff",
+            "run_command",
+            "run_script",
+            "start_background_process",
+            "stop_background_process",
+            "get_process_status",
+            "list_background_processes",
+            "install_dependencies",
+        ):
             try:
                 from smart_ai_cli.tools import execute_tool
 

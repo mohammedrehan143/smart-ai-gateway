@@ -122,9 +122,7 @@ def chat_cmd(
     policy: Optional[str] = typer.Option(
         None, "--policy", "-p", help="Routing policy: adaptive, always_cheap, always_strong"
     ),
-    mode: Optional[str] = typer.Option(
-        None, "--mode", "-m", help="Gateway mode: auto, fast, balanced, strong, expert"
-    ),
+    mode: Optional[str] = typer.Option(None, "--mode", "-m", help="Gateway mode: auto, fast, balanced, strong, expert"),
     temperature: Optional[float] = typer.Option(None, "--temperature", "-t", help="Sampling temperature (0.0 to 2.0)"),
     stream: Optional[bool] = typer.Option(None, "--stream/--no-stream", help="Enable or disable token streaming"),
 ) -> None:
@@ -199,7 +197,9 @@ def chat_cmd(
                 client.set_session_mode("auto")
             except Exception:
                 pass
-            console.print(f"{CHAT_INDENT}[bold green]✔[/bold green] Conversation history cleared and mode reset to Auto.")
+            console.print(
+                f"{CHAT_INDENT}[bold green]✔[/bold green] Conversation history cleared and mode reset to Auto."
+            )
             continue
         elif user_input.startswith("/mode"):
             parts = user_input.split()
@@ -345,9 +345,7 @@ def ask_cmd(
     policy: Optional[str] = typer.Option(
         None, "--policy", "-p", help="Routing policy (adaptive, always_cheap, always_strong)"
     ),
-    mode: Optional[str] = typer.Option(
-        None, "--mode", "-m", help="Gateway mode: auto, fast, balanced, strong, expert"
-    ),
+    mode: Optional[str] = typer.Option(None, "--mode", "-m", help="Gateway mode: auto, fast, balanced, strong, expert"),
     temperature: Optional[float] = typer.Option(None, "--temperature", "-t", help="Sampling temperature"),
     stream: bool = typer.Option(True, "--stream/--no-stream", help="Stream response tokens"),
     json_output: bool = typer.Option(False, "--json", "-j", help="Output raw JSON completion response"),
@@ -388,9 +386,7 @@ def ask_cmd(
             full_reply = ""
             meta_chunk: Optional[Dict] = None
 
-            for chunk in client.stream_chat(
-                messages, policy=active_policy, mode=active_mode, temperature=active_temp
-            ):
+            for chunk in client.stream_chat(messages, policy=active_policy, mode=active_mode, temperature=active_temp):
                 choices = chunk.get("choices", [])
                 if choices:
                     delta = choices[0].get("delta", {})

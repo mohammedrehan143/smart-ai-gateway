@@ -91,8 +91,10 @@ def extract_action_blocks(content: str, task_prompt: Optional[str] = None) -> Li
             p_m = re.search(r'"path"\s*:\s*"([^"]+)"', raw_json)
             c_m = re.search(r'"content"\s*:\s*"([\s\S]*?)(?:"\s*\}|\Z)', raw_json)
             if p_m and c_m:
-                content_val = c_m.group(1).replace(r'\"', '"').replace(r'\n', '\n').rstrip('"')
-                actions.append({"name": tool_name, "args": {"path": p_m.group(1), "content": content_val}, "raw": m.group(0)})
+                content_val = c_m.group(1).replace(r"\"", '"').replace(r"\n", "\n").rstrip('"')
+                actions.append(
+                    {"name": tool_name, "args": {"path": p_m.group(1), "content": content_val}, "raw": m.group(0)}
+                )
             else:
                 actions.append({"name": tool_name, "args": {"raw_payload": raw_json}, "raw": m.group(0)})
 
@@ -131,14 +133,16 @@ def extract_action_blocks(content: str, task_prompt: Optional[str] = None) -> Li
         if lang_tag.startswith("action:") or lang_tag.startswith("tool:"):
             continue
 
-        if lang_tag in ignored_langs or (not lang_tag and any(cmd in code_body for cmd in ("cd ", "npm ", "python -m http"))):
+        if lang_tag in ignored_langs or (
+            not lang_tag and any(cmd in code_body for cmd in ("cd ", "npm ", "python -m http"))
+        ):
             continue
 
-        if r'\"' in code_body:
-            code_body = code_body.replace(r'\"', '"')
+        if r"\"" in code_body:
+            code_body = code_body.replace(r"\"", '"')
 
         # Look for filename in preceding text
-        preceding = content[max(0, m.start() - 250):m.start()]
+        preceding = content[max(0, m.start() - 250) : m.start()]
         fn_match = re.search(
             r"[`*'\"]*([a-zA-Z0-9_\-./\\]+\.(?:html?|css|js|ts|jsx|tsx|py|json|md|txt|ya?ml|sql))[`*'\"]*",
             preceding,

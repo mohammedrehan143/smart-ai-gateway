@@ -1,18 +1,24 @@
-"""Local filesystem and execution tools for the Smart AI CLI Autonomous Agent."""
+"""Local filesystem and execution tools for the Smart AI CLI Autonomous Agent.
+
+Combines WorkspaceFilesystem, FileHistoryManager, and ProcessManager into a unified
+execution interface for both CLI Autonomous Agent and backend Strong Agent.
+"""
 
 from __future__ import annotations
 
-import subprocess
+import json
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from smart_ai_cli.filesystem import WorkspaceFilesystem, default_workspace_fs
+from smart_ai_cli.process_manager import ProcessManager, default_process_manager
 
 TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     {
         "type": "function",
         "function": {
             "name": "write_file",
-            "description": "Create a new file or overwrite an existing file with the specified content. Automatically creates parent directories.",
+            "description": "Create a new file or overwrite an existing file with the specified content. Automatically creates parent directories and creates a version snapshot.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -33,7 +39,7 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
         "type": "function",
         "function": {
             "name": "edit_file",
-            "description": "Edits an existing file by replacing an exact target string with replacement text.",
+            "description": "Edits an existing file by replacing an exact target string with replacement text, snapshotting before change.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -82,6 +88,101 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "delete_file",
+            "description": "Deletes a file after recording a recovery snapshot.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path of the file to delete.",
+                    },
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "rename_file",
+            "description": "Renames a file or directory from old_path to new_path.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "old_path": {"type": "string", "description": "Existing path."},
+                    "new_path": {"type": "string", "description": "New target path."},
+                },
+                "required": ["old_path", "new_path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "move_file",
+            "description": "Moves a file or directory to a new destination.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "source": {"type": "string", "description": "Source path."},
+                    "destination": {"type": "string", "description": "Destination path."},
+                },
+                "required": ["source", "destination"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "copy_file",
+            "description": "Copies a file to a new destination and verifies copy integrity.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "source": {"type": "string", "description": "Source file path."},
+                    "destination": {"type": "string", "description": "Destination file path."},
+                    "overwrite": {
+                        "type": "boolean",
+                        "description": "Whether to overwrite existing destination (default true).",
+                    },
+                },
+                "required": ["source", "destination"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_directory",
+            "description": "Creates a directory recursively.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Directory path to create."},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_directory",
+            "description": "Deletes a directory.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Directory path to delete."},
+                    "recursive": {"type": "boolean", "description": "Whether to delete recursively (default true)."},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "list_directory",
             "description": "Lists the files and folders inside a given directory path.",
             "parameters": {
@@ -102,6 +203,68 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
     {
         "type": "function",
         "function": {
+            "name": "find_files",
+            "description": "Finds files matching a glob pattern (e.g. '*.py', '**/*.tsx').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "pattern": {"type": "string", "description": "Glob pattern to match."},
+                    "path": {"type": "string", "description": "Base directory to search in (default '.')."},
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_in_files",
+            "description": "Grep search inside file contents matching text or regex pattern.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search string or regex."},
+                    "path": {"type": "string", "description": "Base directory (default '.')."},
+                    "file_pattern": {"type": "string", "description": "Filename pattern filter (default '*')."},
+                    "is_regex": {"type": "boolean", "description": "Whether query is a regex."},
+                    "case_sensitive": {"type": "boolean", "description": "Whether search is case-sensitive."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "rollback_file",
+            "description": "Rolls back a file to its previous or specific snapshot version.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Path of the file to rollback."},
+                    "snapshot_id": {"type": "string", "description": "Optional specific snapshot ID to restore."},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_file_diff",
+            "description": "Shows unified diff between current file and snapshot version.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "File path."},
+                    "snapshot_id": {"type": "string", "description": "Optional snapshot ID."},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "run_command",
             "description": "Executes a shell command in the current working directory.",
             "parameters": {
@@ -113,17 +276,112 @@ TOOL_DEFINITIONS: List[Dict[str, Any]] = [
                     },
                     "timeout_seconds": {
                         "type": "integer",
-                        "description": "Maximum seconds to allow before aborting (default 30).",
+                        "description": "Maximum seconds to allow before aborting (default 60).",
                     },
                 },
                 "required": ["command"],
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_script",
+            "description": "Executes a script file using the appropriate runtime interpreter.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "script_path": {"type": "string", "description": "Path to the script file."},
+                    "interpreter": {
+                        "type": "string",
+                        "description": "Optional interpreter command (e.g. 'python', 'node').",
+                    },
+                    "args": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Arguments to pass to script.",
+                    },
+                    "timeout_seconds": {"type": "integer", "description": "Timeout in seconds."},
+                },
+                "required": ["script_path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "start_background_process",
+            "description": "Starts a background process (e.g., development server) and returns process ID.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string", "description": "Shell command to run in background."},
+                    "process_name": {"type": "string", "description": "Optional descriptive name."},
+                },
+                "required": ["command"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "stop_background_process",
+            "description": "Stops a running background process.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "process_id": {"type": "string", "description": "Process ID or name."},
+                },
+                "required": ["process_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_process_status",
+            "description": "Gets current status and recent log output of a background process.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "process_id": {"type": "string", "description": "Process ID or name."},
+                    "tail_lines": {"type": "integer", "description": "Number of log lines to return (default 30)."},
+                },
+                "required": ["process_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_background_processes",
+            "description": "Lists all background processes and their running status.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "install_dependencies",
+            "description": "Installs dependencies using pip, npm, yarn, pnpm, or cargo.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "package_manager": {"type": "string", "description": "pip, npm, yarn, pnpm, or cargo."},
+                    "packages": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of packages.",
+                    },
+                },
+                "required": ["package_manager"],
+            },
+        },
+    },
 ]
 
 AGENT_SYSTEM_PROMPT = """You are an autonomous AI software engineer and terminal agent connected to the user's workspace via Smart AI Gateway.
-You have direct access to tools to inspect and modify the local filesystem.
+You have direct access to tools to inspect and modify the local filesystem, run terminal commands, manage background processes, and verify code.
 
 Provide clear, direct, and well-structured answers without outputting internal policy thoughts, chain-of-thought traces, or scratchpad notes.
 
@@ -156,6 +414,13 @@ To read a file:
 }
 ```
 
+To delete a file:
+```action:delete_file
+{
+  "path": "filename.ext"
+}
+```
+
 To list a directory:
 ```action:list_directory
 {
@@ -163,10 +428,31 @@ To list a directory:
 }
 ```
 
+To find files matching a pattern:
+```action:find_files
+{
+  "pattern": "*.py"
+}
+```
+
+To search code inside files:
+```action:search_in_files
+{
+  "query": "def my_func"
+}
+```
+
 To run a shell command:
 ```action:run_command
 {
   "command": "shell command here"
+}
+```
+
+To rollback a file:
+```action:rollback_file
+{
+  "path": "filename.ext"
 }
 ```
 
@@ -178,44 +464,14 @@ RULES:
 
 def write_file(path: str, content: str, cwd: Optional[Path | str] = None) -> Tuple[bool, str]:
     """Creates or overwrites a file with content, verifying the write on disk."""
-    try:
-        base = Path(cwd).resolve() if cwd else Path.cwd().resolve()
-        resolved = (base / path).resolve()
-        resolved.parent.mkdir(parents=True, exist_ok=True)
-        resolved.write_text(content, encoding="utf-8")
-        if not resolved.exists():
-            return False, f"Verification failed: file '{path}' was not found on disk after write."
-        size = resolved.stat().st_size
-        return True, f"Successfully created {path} ({size} bytes)"
-    except Exception as exc:
-        return False, f"Failed to write file '{path}': {exc}"
+    fs = WorkspaceFilesystem(cwd) if cwd else default_workspace_fs
+    return fs.write_file(path=path, content=content, cwd=cwd)
 
 
 def edit_file(path: str, target: str, replacement: str, cwd: Optional[Path | str] = None) -> Tuple[bool, str]:
     """Replaces target string in an existing file with replacement string and verifies the edit."""
-    try:
-        base = Path(cwd).resolve() if cwd else Path.cwd().resolve()
-        resolved = (base / path).resolve()
-        if not resolved.is_file():
-            return False, f"File not found: '{path}'"
-
-        text = resolved.read_text(encoding="utf-8")
-        if target not in text:
-            return False, f"Target text not found in '{path}'. Make sure exact characters and indentation match."
-
-        updated = text.replace(target, replacement, 1)
-        resolved.write_text(updated, encoding="utf-8")
-
-        # Verify modification
-        new_text = resolved.read_text(encoding="utf-8")
-        if target in new_text and target != replacement:
-            return False, f"Verification failed: Target text still found in '{path}' after edit."
-        if replacement not in new_text:
-            return False, f"Verification failed: Replacement text not found in '{path}' after edit."
-
-        return True, f"Successfully updated '{path}'."
-    except Exception as exc:
-        return False, f"Failed to edit file '{path}': {exc}"
+    fs = WorkspaceFilesystem(cwd) if cwd else default_workspace_fs
+    return fs.edit_file(path=path, target=target, replacement=replacement, cwd=cwd)
 
 
 def read_file(
@@ -225,24 +481,46 @@ def read_file(
     cwd: Optional[Path | str] = None,
 ) -> Tuple[bool, str]:
     """Reads file contents, optionally slicing by line numbers (1-indexed)."""
-    try:
-        base = Path(cwd).resolve() if cwd else Path.cwd().resolve()
-        resolved = (base / path).resolve()
-        if not resolved.is_file():
-            return False, f"File not found: '{path}'"
+    fs = WorkspaceFilesystem(cwd) if cwd else default_workspace_fs
+    return fs.read_file(path=path, start_line=start_line, end_line=end_line, cwd=cwd)
 
-        lines = resolved.read_text(encoding="utf-8", errors="replace").splitlines(keepends=True)
-        total = len(lines)
 
-        s = max(1, start_line) if start_line is not None else 1
-        e = min(total, end_line) if end_line is not None else total
+def delete_file(path: str, cwd: Optional[Path | str] = None) -> Tuple[bool, str]:
+    """Deletes a file, recording a history snapshot."""
+    fs = WorkspaceFilesystem(cwd) if cwd else default_workspace_fs
+    return fs.delete_file(path=path, cwd=cwd)
 
-        selected = lines[s - 1 : e]
-        numbered = [f"{i + s:4d} | {line}" for i, line in enumerate(selected)]
-        output = "".join(numbered)
-        return True, output if output else "(file is empty)"
-    except Exception as exc:
-        return False, f"Failed to read file '{path}': {exc}"
+
+def rename_file(old_path: str, new_path: str, cwd: Optional[Path | str] = None) -> Tuple[bool, str]:
+    """Renames a file or directory."""
+    fs = WorkspaceFilesystem(cwd) if cwd else default_workspace_fs
+    return fs.rename_file(old_path=old_path, new_path=new_path, cwd=cwd)
+
+
+def move_file(source: str, destination: str, cwd: Optional[Path | str] = None) -> Tuple[bool, str]:
+    """Moves a file or directory."""
+    fs = WorkspaceFilesystem(cwd) if cwd else default_workspace_fs
+    return fs.move_file(source=source, destination=destination, cwd=cwd)
+
+
+def copy_file(
+    source: str, destination: str, overwrite: bool = True, cwd: Optional[Path | str] = None
+) -> Tuple[bool, str]:
+    """Copies a file to a new destination."""
+    fs = WorkspaceFilesystem(cwd) if cwd else default_workspace_fs
+    return fs.copy_file(source=source, destination=destination, overwrite=overwrite, cwd=cwd)
+
+
+def create_directory(path: str, cwd: Optional[Path | str] = None) -> Tuple[bool, str]:
+    """Creates a directory recursively."""
+    fs = WorkspaceFilesystem(cwd) if cwd else default_workspace_fs
+    return fs.create_directory(path=path, cwd=cwd)
+
+
+def delete_directory(path: str, recursive: bool = True, cwd: Optional[Path | str] = None) -> Tuple[bool, str]:
+    """Deletes a directory."""
+    fs = WorkspaceFilesystem(cwd) if cwd else default_workspace_fs
+    return fs.delete_directory(path=path, recursive=recursive, cwd=cwd)
 
 
 def list_directory(
@@ -251,67 +529,126 @@ def list_directory(
     cwd: Optional[Path | str] = None,
 ) -> Tuple[bool, str]:
     """Lists files and directories in path."""
-    try:
-        base = Path(cwd).resolve() if cwd else Path.cwd().resolve()
-        target = (base / path).resolve() if path else base
-        if not target.exists():
-            return False, f"Directory not found: '{path}'"
-
-        items = []
-        if recursive:
-            for p in sorted(target.rglob("*")):
-                # Skip .git and __pycache__
-                if ".git" in p.parts or "__pycache__" in p.parts:
-                    continue
-                rel = p.relative_to(target)
-                if p.is_dir():
-                    items.append(f"[DIR]  {rel}/")
-                else:
-                    items.append(f"[FILE] {rel} ({p.stat().st_size} bytes)")
-        else:
-            for p in sorted(target.iterdir()):
-                if p.name in (".git", "__pycache__"):
-                    continue
-                if p.is_dir():
-                    items.append(f"[DIR]  {p.name}/")
-                else:
-                    items.append(f"[FILE] {p.name} ({p.stat().st_size} bytes)")
-
-        return True, "\n".join(items) if items else "(directory is empty)"
-    except Exception as exc:
-        return False, f"Failed to list directory '{path}': {exc}"
+    fs = WorkspaceFilesystem(cwd) if cwd else default_workspace_fs
+    return fs.list_directory(path=path, recursive=recursive, cwd=cwd)
 
 
-def run_command(command: str, timeout_seconds: int = 30, cwd: Optional[Path | str] = None) -> Tuple[bool, str]:
+def find_files(
+    pattern: str = "*",
+    path: Optional[str] = None,
+    cwd: Optional[Path | str] = None,
+) -> Tuple[bool, str]:
+    """Finds files matching glob pattern."""
+    fs = WorkspaceFilesystem(cwd) if cwd else default_workspace_fs
+    return fs.find_files(pattern=pattern, path=path, cwd=cwd)
+
+
+def search_in_files(
+    query: str,
+    path: Optional[str] = None,
+    file_pattern: str = "*",
+    is_regex: bool = False,
+    case_sensitive: bool = False,
+    cwd: Optional[Path | str] = None,
+) -> Tuple[bool, str]:
+    """Searches for text in files."""
+    fs = WorkspaceFilesystem(cwd) if cwd else default_workspace_fs
+    return fs.search_in_files(
+        query=query,
+        path=path,
+        file_pattern=file_pattern,
+        is_regex=is_regex,
+        case_sensitive=case_sensitive,
+        cwd=cwd,
+    )
+
+
+def rollback_file(path: str, snapshot_id: Optional[str] = None, cwd: Optional[Path | str] = None) -> Tuple[bool, str]:
+    """Restores a file to a previous snapshot."""
+    fs = WorkspaceFilesystem(cwd) if cwd else default_workspace_fs
+    return fs.rollback(path=path, snapshot_id=snapshot_id, cwd=cwd)
+
+
+def get_file_diff(path: str, snapshot_id: Optional[str] = None, cwd: Optional[Path | str] = None) -> Tuple[bool, str]:
+    """Generates unified diff between file and snapshot."""
+    fs = WorkspaceFilesystem(cwd) if cwd else default_workspace_fs
+    return fs.get_diff(path=path, snapshot_id=snapshot_id, cwd=cwd)
+
+
+def run_command(command: str, timeout_seconds: int = 60, cwd: Optional[Path | str] = None) -> Tuple[bool, str]:
     """Executes a shell command in the specified working directory."""
-    try:
-        work_dir = Path(cwd).resolve() if cwd else Path.cwd().resolve()
-        proc = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-            cwd=str(work_dir),
-        )
-        out = (proc.stdout or "").strip()
-        err = (proc.stderr or "").strip()
-        combined = []
-        if out:
-            combined.append(f"STDOUT:\n{out}")
-        if err:
-            combined.append(f"STDERR:\n{err}")
-        combined.append(f"Exit Code: {proc.returncode}")
-        return proc.returncode == 0, "\n\n".join(combined)
-    except subprocess.TimeoutExpired:
-        return False, f"Command timed out after {timeout_seconds} seconds."
-    except Exception as exc:
-        return False, f"Command execution error: {exc}"
+    pm = ProcessManager(cwd) if cwd else default_process_manager
+    success, output, _ = pm.run_command(command=command, timeout_seconds=timeout_seconds, cwd=cwd)
+    return success, output
+
+
+def run_script(
+    script_path: str,
+    interpreter: Optional[str] = None,
+    args: Optional[List[str]] = None,
+    timeout_seconds: int = 60,
+    cwd: Optional[Path | str] = None,
+) -> Tuple[bool, str]:
+    """Executes a script with a given or inferred interpreter."""
+    pm = ProcessManager(cwd) if cwd else default_process_manager
+    success, output, _ = pm.run_script(
+        script_path=script_path,
+        interpreter=interpreter,
+        args=args,
+        timeout_seconds=timeout_seconds,
+        cwd=cwd,
+    )
+    return success, output
+
+
+def start_background_process(
+    command: str,
+    process_name: Optional[str] = None,
+    cwd: Optional[Path | str] = None,
+) -> Tuple[bool, str]:
+    """Starts a process in the background."""
+    pm = ProcessManager(cwd) if cwd else default_process_manager
+    success, msg, _ = pm.start_background_process(command=command, process_name=process_name, cwd=cwd)
+    return success, msg
+
+
+def stop_background_process(process_id: str, cwd: Optional[Path | str] = None) -> Tuple[bool, str]:
+    """Stops a background process."""
+    pm = ProcessManager(cwd) if cwd else default_process_manager
+    return pm.stop_background_process(process_id)
+
+
+def get_process_status(process_id: str, tail_lines: int = 30, cwd: Optional[Path | str] = None) -> Tuple[bool, str]:
+    """Gets status and logs of a background process."""
+    pm = ProcessManager(cwd) if cwd else default_process_manager
+    ok, status = pm.get_process_status(process_id, tail_lines)
+    if ok:
+        return True, json.dumps(status, indent=2)
+    return False, status.get("error", "Unknown error")
+
+
+def list_background_processes(cwd: Optional[Path | str] = None) -> Tuple[bool, str]:
+    """Lists all background processes."""
+    pm = ProcessManager(cwd) if cwd else default_process_manager
+    procs = pm.list_background_processes()
+    return True, json.dumps(procs, indent=2) if procs else "No background processes currently active."
+
+
+def install_dependencies(
+    package_manager: str,
+    packages: Optional[List[str]] = None,
+    cwd: Optional[Path | str] = None,
+) -> Tuple[bool, str]:
+    """Installs dependencies via package manager."""
+    pm = ProcessManager(cwd) if cwd else default_process_manager
+    return pm.install_dependencies(package_manager=package_manager, packages=packages, cwd=cwd)
 
 
 def execute_tool(name: str, args: Dict[str, Any], cwd: Optional[Path | str] = None) -> Tuple[bool, str]:
     """Dispatches a tool call to the corresponding local execution function."""
     clean_name = name.lower().strip()
+
+    # Core Filesystem Tools
     if clean_name == "write_file":
         return write_file(path=args.get("path", ""), content=args.get("content", ""), cwd=cwd)
     elif clean_name == "edit_file":
@@ -328,16 +665,88 @@ def execute_tool(name: str, args: Dict[str, Any], cwd: Optional[Path | str] = No
             end_line=args.get("end_line"),
             cwd=cwd,
         )
+    elif clean_name == "delete_file":
+        return delete_file(path=args.get("path", ""), cwd=cwd)
+    elif clean_name == "rename_file":
+        return rename_file(old_path=args.get("old_path", ""), new_path=args.get("new_path", ""), cwd=cwd)
+    elif clean_name == "move_file":
+        return move_file(source=args.get("source", ""), destination=args.get("destination", ""), cwd=cwd)
+    elif clean_name == "copy_file":
+        return copy_file(
+            source=args.get("source", ""),
+            destination=args.get("destination", ""),
+            overwrite=bool(args.get("overwrite", True)),
+            cwd=cwd,
+        )
+    elif clean_name == "create_directory":
+        return create_directory(path=args.get("path", ""), cwd=cwd)
+    elif clean_name == "delete_directory":
+        return delete_directory(
+            path=args.get("path", ""),
+            recursive=bool(args.get("recursive", True)),
+            cwd=cwd,
+        )
     elif clean_name == "list_directory":
         return list_directory(
             path=args.get("path"),
             recursive=bool(args.get("recursive", False)),
             cwd=cwd,
         )
+    elif clean_name == "find_files":
+        return find_files(
+            pattern=args.get("pattern", "*"),
+            path=args.get("path"),
+            cwd=cwd,
+        )
+    elif clean_name == "search_in_files":
+        return search_in_files(
+            query=args.get("query", ""),
+            path=args.get("path"),
+            file_pattern=args.get("file_pattern", "*"),
+            is_regex=bool(args.get("is_regex", False)),
+            case_sensitive=bool(args.get("case_sensitive", False)),
+            cwd=cwd,
+        )
+    elif clean_name == "rollback_file":
+        return rollback_file(path=args.get("path", ""), snapshot_id=args.get("snapshot_id"), cwd=cwd)
+    elif clean_name == "get_file_diff":
+        return get_file_diff(path=args.get("path", ""), snapshot_id=args.get("snapshot_id"), cwd=cwd)
+
+    # Process and Execution Tools
     elif clean_name == "run_command":
         return run_command(
             command=args.get("command", ""),
-            timeout_seconds=int(args.get("timeout_seconds", 30)),
+            timeout_seconds=int(args.get("timeout_seconds", 60)),
+            cwd=cwd,
+        )
+    elif clean_name == "run_script":
+        return run_script(
+            script_path=args.get("script_path", ""),
+            interpreter=args.get("interpreter"),
+            args=args.get("args"),
+            timeout_seconds=int(args.get("timeout_seconds", 60)),
+            cwd=cwd,
+        )
+    elif clean_name == "start_background_process":
+        return start_background_process(
+            command=args.get("command", ""),
+            process_name=args.get("process_name"),
+            cwd=cwd,
+        )
+    elif clean_name == "stop_background_process":
+        return stop_background_process(process_id=args.get("process_id", ""), cwd=cwd)
+    elif clean_name == "get_process_status":
+        return get_process_status(
+            process_id=args.get("process_id", ""),
+            tail_lines=int(args.get("tail_lines", 30)),
+            cwd=cwd,
+        )
+    elif clean_name == "list_background_processes":
+        return list_background_processes(cwd=cwd)
+    elif clean_name == "install_dependencies":
+        return install_dependencies(
+            package_manager=args.get("package_manager", "pip"),
+            packages=args.get("packages"),
             cwd=cwd,
         )
     else:

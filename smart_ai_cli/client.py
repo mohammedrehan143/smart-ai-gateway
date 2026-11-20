@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import uuid
 from typing import Any, Dict, Generator, List, Optional
 import httpx
@@ -324,13 +325,17 @@ class GatewayClient:
         if tools:
             payload["tools"] = tools
 
-        try:
-            with httpx.Client(timeout=self.timeout) as client:
-                resp = client.post(url, headers=self._headers(), json=payload)
-                self._handle_response_error(resp)
-                return resp.json()
-        except httpx.ConnectError as exc:
-            raise GatewayConnectionError(f"Cannot connect to Gateway at {self.base_url}: {exc}") from exc
+        retries = 2
+        for attempt in range(retries + 1):
+            try:
+                with httpx.Client(timeout=self.timeout) as client:
+                    resp = client.post(url, headers=self._headers(), json=payload)
+                    self._handle_response_error(resp)
+                    return resp.json()
+            except (httpx.ConnectError, httpx.RemoteProtocolError, httpx.ReadTimeout, httpx.ConnectTimeout) as exc:
+                if attempt == retries:
+                    raise GatewayConnectionError(f"Cannot connect to Gateway at {self.base_url}: {exc}") from exc
+                time.sleep(1.0 * (attempt + 1))
 
     def stream_chat(
         self,
