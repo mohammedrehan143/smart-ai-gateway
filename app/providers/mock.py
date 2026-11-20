@@ -72,8 +72,28 @@ class MockProviderAdapter(BaseProviderAdapter):
             tokens_set = set(lower_msg.replace("?", " ").replace("!", " ").replace(".", " ").split())
             if any(g in tokens_set for g in ("hi", "hello", "hey", "hy", "greetings", "yo", "sup")):
                 content = "Mock completion response: Hello! I am the Smart AI Gateway Assistant. How can I help you today with coding, architecture, or model routing?"
-            elif any(w in lower_msg for w in ("name", "who are you", "what are you", "what is your name")):
+            elif any(w in lower_msg for w in ("who are you", "what are you", "what is your name", "your name?")):
                 content = "Mock completion response: I am the Smart AI Gateway Assistant, an intelligent multi-agent routing and execution platform designed to orchestrate Weak and Strong AI models seamlessly."
+            elif any(w in lower_msg for w in ("website", "landing page", "web page", "create a site", "build a site", "html site")):
+                content = (
+                    "Mock completion response: Here is a complete, modern responsive website.\n\n"
+                    "```action:write_file\n"
+                    "{\n"
+                    '  "path": "index.html",\n'
+                    '  "content": "<!DOCTYPE html>\\n<html lang=\\"en\\">\\n<head>\\n    <meta charset=\\"UTF-8\\">\\n    <meta name=\\"viewport\\" content=\\"width=device-width, initial-scale=1.0\\">\\n    <title>Modern Website</title>\\n    <style>\\n        * { box-sizing: border-box; margin: 0; padding: 0; }\\n        body { font-family: -apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, sans-serif; background: #0f172a; color: #f8fafc; padding: 2rem; text-align: center; }\\n        .card { max-width: 600px; margin: 4rem auto; padding: 2.5rem; background: #1e293b; border-radius: 12px; border: 1px solid #334155; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }\\n        h1 { color: #818cf8; margin-bottom: 1rem; font-size: 2rem; }\\n        p { color: #94a3b8; line-height: 1.6; font-size: 1.1rem; }\\n    </style>\\n</head>\\n<body>\\n    <div class=\\"card\\">\\n        <h1>Welcome to Your Website</h1>\\n        <p>This website was generated directly by the Smart AI Gateway.</p>\\n    </div>\\n</body>\\n</html>"\n'
+                    "}\n"
+                    "```"
+                )
+            elif "login" in lower_msg:
+                content = (
+                    "Mock completion response: Here is a complete login page.\n\n"
+                    "```action:write_file\n"
+                    "{\n"
+                    '  "path": "login.html",\n'
+                    '  "content": "<!DOCTYPE html>\\n<html lang=\\"en\\">\\n<head>\\n    <meta charset=\\"UTF-8\\">\\n    <title>Login</title>\\n    <style>\\n        body { font-family: Arial, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; background: #f1f5f9; margin: 0; }\\n        .box { background: #fff; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); width: 320px; }\\n        h2 { text-align: center; margin-bottom: 1.5rem; }\\n        input { width: 100%; padding: 0.6rem; margin-bottom: 1rem; border: 1px solid #cbd5e1; border-radius: 4px; box-sizing: border-box; }\\n        button { width: 100%; padding: 0.75rem; background: #4f46e5; color: #fff; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }\\n    </style>\\n</head>\\n<body>\\n    <div class=\\"box\\">\\n        <h2>Sign In</h2>\\n        <form action=\\"/login\\" method=\\"POST\\">\\n            <input type=\\"text\\" name=\\"username\\" placeholder=\\"Username\\" required>\\n            <input type=\\"password\\" name=\\"password\\" placeholder=\\"Password\\" required>\\n            <button type=\\"submit\\">Log In</button>\\n        </form>\\n    </div>\\n</body>\\n</html>"\n'
+                    "}\n"
+                    "```"
+                )
             elif any(w in lower_msg for w in ("debug", "debug code", "can you debug", "bug")):
                 content = (
                     "Mock completion response: Yes, I can debug code across Python, TypeScript, Go, Rust, Java, and C++. "

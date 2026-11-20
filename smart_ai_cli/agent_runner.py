@@ -78,7 +78,7 @@ def extract_action_blocks(content: str, task_prompt: Optional[str] = None) -> Li
     actions: List[Dict[str, Any]] = []
 
     # 1. Standard ```action:<tool_name>\n{...}``` or ```tool:<tool_name>\n{...}```
-    pattern = r"```(?:action|tool):([a-zA-Z0-9_-]+)\s*\n([\s\S]*?)```"
+    pattern = r"```(?:action|tool):([a-zA-Z0-9_-]+)\s*\n([\s\S]*?)(?:```|$)"
     matches = re.finditer(pattern, content)
     for m in matches:
         tool_name = m.group(1).strip()
@@ -87,14 +87,20 @@ def extract_action_blocks(content: str, task_prompt: Optional[str] = None) -> Li
             args = json.loads(raw_json)
             actions.append({"name": tool_name, "args": args, "raw": m.group(0)})
         except json.JSONDecodeError:
-            # Try fixing common json flaws or key=val
-            actions.append({"name": tool_name, "args": {"raw_payload": raw_json}, "raw": m.group(0)})
+            # Try regex extraction for path and content if JSON was cut off or contained unescaped quotes
+            p_m = re.search(r'"path"\s*:\s*"([^"]+)"', raw_json)
+            c_m = re.search(r'"content"\s*:\s*"([\s\S]*?)(?:"\s*\}|\Z)', raw_json)
+            if p_m and c_m:
+                content_val = c_m.group(1).replace(r'\"', '"').replace(r'\n', '\n').rstrip('"')
+                actions.append({"name": tool_name, "args": {"path": p_m.group(1), "content": content_val}, "raw": m.group(0)})
+            else:
+                actions.append({"name": tool_name, "args": {"raw_payload": raw_json}, "raw": m.group(0)})
 
     if actions:
         return actions
 
     # 2. Check for ```json\n{"action": "write_file", ...}``` or direct {"path": ..., "content": ...}
-    json_block_pattern = r"```(?:json)?\s*\n([\s\S]*?)```"
+    json_block_pattern = r"```(?:json)?\s*\n([\s\S]*?)(?:```|$)"
     for m in re.finditer(json_block_pattern, content):
         raw_json = m.group(1).strip()
         try:
@@ -110,39 +116,79 @@ def extract_action_blocks(content: str, task_prompt: Optional[str] = None) -> Li
     if actions:
         return actions
 
-    # 3. Fallback heuristic: Extract filename and markdown code block
-    extracted_path = extract_target_filename(task_prompt, content)
-    code_block_match = re.search(r"```([a-zA-Z0-9_\-.:]*)\s*\n([\s\S]*?)(?:```|$)", content)
-    if code_block_match:
-        lang_tag = code_block_match.group(1).strip()
-        extracted_content = code_block_match.group(2).strip()
+    # 3. Fallback heuristic: Extract filename(s) and markdown code block(s)
+    default_target_path = extract_target_filename(task_prompt, content)
+    ignored_langs = {"bash", "sh", "shell", "cmd", "powershell", "terminal", "zsh"}
+    ignored_names = {"node.js", "react.js", "vue.js", "next.js", "express.js", "three.js", "angular.js"}
+    seen_paths = set()
 
-        if ":" in lang_tag and not extracted_path:
-            extracted_path = lang_tag.split(":", 1)[1].strip()
-        elif "." in lang_tag and not extracted_path:
-            extracted_path = lang_tag.strip()
+    for m in re.finditer(r"```([a-zA-Z0-9_\-.:]*)\s*\n([\s\S]*?)(?:```|$)", content):
+        lang_tag = m.group(1).lower().strip()
+        code_body = m.group(2).strip()
+        if not code_body:
+            continue
 
-        if not extracted_path:
-            if "<!DOCTYPE html>" in extracted_content or "<html" in extracted_content:
-                extracted_path = "index.html"
-            elif "def " in extracted_content or "import " in extracted_content:
-                extracted_path = "script.py"
+        if lang_tag.startswith("action:") or lang_tag.startswith("tool:"):
+            continue
 
-        if extracted_path and extracted_content:
+        if lang_tag in ignored_langs or (not lang_tag and any(cmd in code_body for cmd in ("cd ", "npm ", "python -m http"))):
+            continue
+
+        if r'\"' in code_body:
+            code_body = code_body.replace(r'\"', '"')
+
+        # Look for filename in preceding text
+        preceding = content[max(0, m.start() - 250):m.start()]
+        fn_match = re.search(
+            r"[`*'\"]*([a-zA-Z0-9_\-./\\]+\.(?:html?|css|js|ts|jsx|tsx|py|json|md|txt|ya?ml|sql))[`*'\"]*",
+            preceding,
+            re.IGNORECASE,
+        )
+
+        target_path = None
+        if fn_match:
+            candidate = fn_match.group(1).strip("`*'\"").rstrip(".,;:)")
+            if candidate and "." in candidate and candidate.lower() not in ignored_names:
+                target_path = candidate
+
+        if not target_path:
+            if ":" in lang_tag:
+                target_path = lang_tag.split(":", 1)[1].strip()
+            elif "." in lang_tag and lang_tag not in ignored_names:
+                target_path = lang_tag
+
+        if not target_path:
+            if "<!doctype html" in code_body.lower() or "<html" in code_body.lower() or lang_tag in ("html", "htm"):
+                target_path = (
+                    default_target_path
+                    if (default_target_path and default_target_path.endswith((".html", ".htm")))
+                    else "index.html"
+                )
+            elif lang_tag == "css":
+                target_path = "style.css"
+            elif lang_tag in ("js", "javascript"):
+                target_path = "script.js"
+            elif lang_tag in ("py", "python"):
+                target_path = "app.py"
+            elif len(actions) == 0 and default_target_path:
+                target_path = default_target_path
+
+        if target_path and target_path not in seen_paths:
+            seen_paths.add(target_path)
             # If HTML file was truncated before closing tags, close them gracefully
-            if extracted_path.endswith((".html", ".htm")):
-                if "<html" in extracted_content.lower() and "</html>" not in extracted_content.lower():
-                    if "</body>" not in extracted_content.lower():
-                        extracted_content += "\n</body>"
-                    extracted_content += "\n</html>\n"
+            if target_path.endswith((".html", ".htm")):
+                if "<html" in code_body.lower() and "</html>" not in code_body.lower():
+                    if "</body>" not in code_body.lower():
+                        code_body += "\n</body>"
+                    code_body += "\n</html>\n"
 
             actions.append(
                 {
                     "id": None,
                     "name": "write_file",
-                    "args": {"path": extracted_path, "content": extracted_content},
+                    "args": {"path": target_path, "content": code_body},
                     "native": False,
-                    "raw": code_block_match.group(0),
+                    "raw": m.group(0),
                 }
             )
 
