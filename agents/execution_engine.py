@@ -167,12 +167,12 @@ class ExecutionEngine:
         if is_strong_override:
             chosen_agent_type = "strong"
 
-        # 3. Provider validation for Strong Mode / Strong Agent
+        # 3. Provider validation for Strong Mode / Strong Agent / Weak Agent
         if chosen_agent_type == "strong":
             if not self.strong_agent.is_configured(user_id):
                 from app.providers.resolver import is_mock_mode_explicitly_enabled
 
-                if is_mock_mode_explicitly_enabled():
+                if is_mock_mode_explicitly_enabled() or getattr(settings, "ENABLE_MOCK_GATEWAY", False):
                     # In test/mock environment, configure mock-strong default
                     cfg = self.credential_mgr.get_agent_config(user_id, "strong")
                     if not cfg:
@@ -213,6 +213,21 @@ class ExecutionEngine:
                     )
                     await self._record_telemetry(user_id, err_resp)
                     return err_resp
+
+        if chosen_agent_type == "weak":
+            if not self.weak_agent.is_configured(user_id):
+                from app.providers.resolver import is_mock_mode_explicitly_enabled
+
+                if is_mock_mode_explicitly_enabled() or getattr(settings, "ENABLE_MOCK_GATEWAY", False):
+                    cfg = self.credential_mgr.get_agent_config(user_id, "weak")
+                    if not cfg:
+                        self.credential_mgr.store_agent_config(
+                            user_id=user_id,
+                            agent_type="weak",
+                            provider="mock",
+                            api_key="mock_weak_key_test",
+                            model_id="mock-cheap",
+                        )
 
         fallback_agent_obj = self.strong_agent if chosen_agent_type == "weak" else self.weak_agent
         fallback_type: Literal["weak", "strong"] = "strong" if chosen_agent_type == "weak" else "weak"
@@ -453,7 +468,7 @@ class ExecutionEngine:
         if chosen_agent_type == "strong" and not self.strong_agent.is_configured(user_id):
             from app.providers.resolver import is_mock_mode_explicitly_enabled
 
-            if is_mock_mode_explicitly_enabled():
+            if is_mock_mode_explicitly_enabled() or getattr(settings, "ENABLE_MOCK_GATEWAY", False):
                 cfg = self.credential_mgr.get_agent_config(user_id, "strong")
                 if not cfg:
                     self.credential_mgr.store_agent_config(
@@ -468,6 +483,76 @@ class ExecutionEngine:
                     "Strong Agent API key is not configured. Please configure your Strong Agent provider and API key in Agent Settings (or run 'smartai login' / set OPENAI_API_KEY)."
                 )
 
+        if chosen_agent_type == "weak" and not self.weak_agent.is_configured(user_id):
+            from app.providers.resolver import is_mock_mode_explicitly_enabled
+
+            if is_mock_mode_explicitly_enabled() or getattr(settings, "ENABLE_MOCK_GATEWAY", False):
+                cfg = self.credential_mgr.get_agent_config(user_id, "weak")
+                if not cfg:
+                    self.credential_mgr.store_agent_config(
+                        user_id=user_id,
+                        agent_type="weak",
+                        provider="mock",
+                        api_key="mock_weak_key_test",
+                        model_id="mock-cheap",
+                    )
+
+        fallback_used = False
+        fallback_reason: Optional[str] = None
+        fallback_status = "not_triggered"
+
+        # If weak agent is still not configured, decide on fallback or explicit notice
+        if chosen_agent_type == "weak" and not self.weak_agent.is_configured(user_id):
+            if norm_mode != GatewayMode.FAST and self.strong_agent.is_configured(user_id):
+                chosen_agent_type = "strong"
+                fallback_used = True
+                fallback_status = "weak_unconfigured_fallback_to_strong"
+                fallback_reason = "Weak Agent is not configured. Fallback to Strong Agent initiated."
+            elif norm_mode == GatewayMode.FAST:
+                unconfigured_msg = (
+                    "⚠️ Weak Agent is not configured. Please configure your Weak Agent provider and API key in Agent Settings "
+                    "(e.g. Groq with llama-3.1-8b-instant or OpenAI with gpt-4o-mini), or switch to Auto / Strong mode."
+                )
+                routing_dict = decision.to_dict()
+                routing_dict["fallback_status"] = "unconfigured_weak_agent"
+                init_event = {
+                    "type": "routing",
+                    "id": req_id,
+                    "agent": "weak",
+                    "selected_mode": norm_mode.value,
+                    "classification_level": decision.complexity,
+                    "routing_reason": decision.reason,
+                    "actual_provider": "unconfigured",
+                    "actual_model": "unconfigured",
+                    "reasoning_effort": "none",
+                    "fallback_status": "unconfigured_weak_agent",
+                    "mock_mode": False,
+                    "routing": routing_dict,
+                }
+                yield f"data: {json.dumps(init_event)}\n\n"
+                yield f"data: {json.dumps({'type': 'token', 'content': unconfigured_msg})}\n\n"
+                final_event = {
+                    "type": "done",
+                    "id": req_id,
+                    "agent": "weak",
+                    "selected_mode": norm_mode.value,
+                    "classification_level": decision.complexity,
+                    "routing_reason": decision.reason,
+                    "actual_provider": "unconfigured",
+                    "actual_model": "unconfigured",
+                    "reasoning_effort": "none",
+                    "fallback_status": "unconfigured_weak_agent",
+                    "latency_ms": int((time.time() - start_time) * 1000),
+                    "token_usage": {"prompt": 0, "completion": 0, "total": 0},
+                    "tokens": {"prompt": 0, "completion": 0, "total": 0},
+                    "estimated_cost": 0.0,
+                    "cost": 0.0,
+                    "mock_mode": False,
+                }
+                yield f"data: {json.dumps(final_event)}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+
         agent_obj = self.strong_agent if chosen_agent_type == "strong" else self.weak_agent
         cfg = self.credential_mgr.get_agent_config(user_id, chosen_agent_type)
         is_mock = (cfg.provider == "mock" or "mock" in cfg.model_id.lower()) if cfg else False
@@ -481,7 +566,10 @@ class ExecutionEngine:
         routing_dict["actual_provider"] = actual_prov
         routing_dict["actual_model"] = actual_mod
         routing_dict["reasoning_effort"] = effort
-        routing_dict["fallback_status"] = "not_triggered"
+        routing_dict["fallback_status"] = fallback_status
+        routing_dict["fallback_used"] = fallback_used
+        if fallback_reason:
+            routing_dict["fallback_reason"] = fallback_reason
 
         init_event = {
             "type": "routing",
@@ -493,7 +581,7 @@ class ExecutionEngine:
             "actual_provider": actual_prov,
             "actual_model": actual_mod,
             "reasoning_effort": effort,
-            "fallback_status": "not_triggered",
+            "fallback_status": fallback_status,
             "mock_mode": is_mock,
             "routing": routing_dict,
         }
@@ -517,74 +605,111 @@ class ExecutionEngine:
                     if content_piece:
                         full_content += content_piece
                         yield f"data: {json.dumps({'type': 'token', 'content': content_piece})}\n\n"
-
-            elapsed_ms = int((time.time() - start_time) * 1000)
-            completion_tokens_est = max(1, len(full_content.split()))
-            cost = agent_obj.calculate_cost(prompt_tokens_est, completion_tokens_est, chosen_agent_type)
-
-            final_event = {
-                "type": "done",
-                "id": req_id,
-                "agent": chosen_agent_type,
-                "selected_mode": norm_mode.value,
-                "classification_level": decision.complexity,
-                "routing_reason": decision.reason,
-                "actual_provider": actual_prov,
-                "actual_model": actual_mod,
-                "reasoning_effort": effort,
-                "fallback_status": "not_triggered",
-                "latency_ms": elapsed_ms,
-                "latency": elapsed_ms,
-                "token_usage": {
-                    "prompt": prompt_tokens_est,
-                    "completion": completion_tokens_est,
-                    "total": prompt_tokens_est + completion_tokens_est,
-                },
-                "tokens": {
-                    "prompt": prompt_tokens_est,
-                    "completion": completion_tokens_est,
-                    "total": prompt_tokens_est + completion_tokens_est,
-                },
-                "estimated_cost": round(cost, 6),
-                "cost": round(cost, 6),
-                "mock_mode": is_mock,
-            }
-            yield f"data: {json.dumps(final_event)}\n\n"
-            yield "data: [DONE]\n\n"
-
-            # Record in telemetry
-            final_resp = GatewayExecutionResponse(
-                id=req_id,
-                prompt=prompt,
-                response=full_content,
-                agent=chosen_agent_type,
-                provider=actual_prov,
-                model=actual_mod,
-                routing=routing_dict,
-                tokens={
-                    "prompt": prompt_tokens_est,
-                    "completion": completion_tokens_est,
-                    "total": prompt_tokens_est + completion_tokens_est,
-                },
-                cost=cost,
-                latency_ms=elapsed_ms,
-                success=True,
-                selected_mode=norm_mode.value,
-                classification_level=decision.complexity,
-                routing_reason=decision.reason,
-                actual_provider=actual_prov,
-                actual_model=actual_mod,
-                reasoning_effort=effort,
-                fallback_status="not_triggered",
-                mock_mode=is_mock,
-            )
-            await self._record_telemetry(user_id, final_resp)
-
         except Exception as exc:
-            yield f"data: {json.dumps({'type': 'error', 'error': str(exc)})}\n\n"
-            yield "data: [DONE]\n\n"
-            yield f"data: {json.dumps({'type': 'error', 'error': str(exc)})}\n\n"
-            yield "data: [DONE]\n\n"
+            logger.warning(f"Streaming failed for {chosen_agent_type} agent: {exc}")
+            if (
+                chosen_agent_type == "weak"
+                and not full_content
+                and norm_mode != GatewayMode.FAST
+                and self.strong_agent.is_configured(user_id)
+            ):
+                try:
+                    logger.info("Falling back to strong agent in stream...")
+                    fallback_used = True
+                    fallback_status = "fallback_to_strong"
+                    chosen_agent_type = "strong"
+                    agent_obj = self.strong_agent
+                    async for chunk in agent_obj.stream_execute(
+                        user_id=user_id,
+                        prompt=prompt,
+                        conversation_history=conversation_history,
+                        temperature_override=temperature,
+                        max_tokens_override=max_tokens,
+                    ):
+                        choices = chunk.get("choices", [])
+                        if choices:
+                            delta = choices[0].get("delta", {})
+                            content_piece = delta.get("content")
+                            if content_piece:
+                                full_content += content_piece
+                                yield f"data: {json.dumps({'type': 'token', 'content': content_piece})}\n\n"
+                except Exception as fb_exc:
+                    logger.error(f"Fallback streaming to strong agent failed: {fb_exc}")
+                    err_msg = f"\n\n⚠️ Error during response generation: {exc}"
+                    full_content += err_msg
+                    yield f"data: {json.dumps({'type': 'token', 'content': err_msg})}\n\n"
+                    yield f"data: {json.dumps({'type': 'error', 'error': str(exc)})}\n\n"
+            else:
+                err_msg = f"\n\n⚠️ Error during response generation: {exc}"
+                full_content += err_msg
+                yield f"data: {json.dumps({'type': 'token', 'content': err_msg})}\n\n"
+                yield f"data: {json.dumps({'type': 'error', 'error': str(exc)})}\n\n"
+
+        if not full_content.strip():
+            full_content = "⚠️ [No response message returned from provider]"
+            yield f"data: {json.dumps({'type': 'token', 'content': full_content})}\n\n"
+
+        elapsed_ms = int((time.time() - start_time) * 1000)
+        completion_tokens_est = max(1, len(full_content.split()))
+        cost = agent_obj.calculate_cost(prompt_tokens_est, completion_tokens_est, chosen_agent_type)
+
+        final_event = {
+            "type": "done",
+            "id": req_id,
+            "agent": chosen_agent_type,
+            "selected_mode": norm_mode.value,
+            "classification_level": decision.complexity,
+            "routing_reason": decision.reason,
+            "actual_provider": actual_prov,
+            "actual_model": actual_mod,
+            "reasoning_effort": effort,
+            "fallback_status": fallback_status,
+            "latency_ms": elapsed_ms,
+            "latency": elapsed_ms,
+            "token_usage": {
+                "prompt": prompt_tokens_est,
+                "completion": completion_tokens_est,
+                "total": prompt_tokens_est + completion_tokens_est,
+            },
+            "tokens": {
+                "prompt": prompt_tokens_est,
+                "completion": completion_tokens_est,
+                "total": prompt_tokens_est + completion_tokens_est,
+            },
+            "estimated_cost": round(cost, 6),
+            "cost": round(cost, 6),
+            "mock_mode": is_mock,
+        }
+        yield f"data: {json.dumps(final_event)}\n\n"
+        yield "data: [DONE]\n\n"
+
+        # Record in telemetry
+        final_resp = GatewayExecutionResponse(
+            id=req_id,
+            prompt=prompt,
+            response=full_content,
+            agent=chosen_agent_type,
+            provider=actual_prov,
+            model=actual_mod,
+            routing=routing_dict,
+            tokens={
+                "prompt": prompt_tokens_est,
+                "completion": completion_tokens_est,
+                "total": prompt_tokens_est + completion_tokens_est,
+            },
+            cost=cost,
+            latency_ms=elapsed_ms,
+            success=True,
+            selected_mode=norm_mode.value,
+            classification_level=decision.complexity,
+            routing_reason=decision.reason,
+            actual_provider=actual_prov,
+            actual_model=actual_mod,
+            reasoning_effort=effort,
+            fallback_status=fallback_status,
+            mock_mode=is_mock,
+        )
+        await self._record_telemetry(user_id, final_resp)
 
     async def _record_telemetry(self, user_id: str, resp: GatewayExecutionResponse) -> None:
         """Stores execution in both the fast buffer and SQLite repository."""

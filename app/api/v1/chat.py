@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from typing import Optional, Union
 from fastapi import APIRouter, Depends, Header, status
 from fastapi.responses import StreamingResponse
@@ -47,10 +48,32 @@ async def create_chat_completion(
     if request.stream:
 
         async def event_generator():
-            completion = await orchestrator.execute_chat(request, client_request_id=x_request_id)
+            try:
+                completion = await orchestrator.execute_chat(request, client_request_id=x_request_id)
+            except Exception as exc:
+                err_chunk = {
+                    "id": f"err_{x_request_id or 'chat'}",
+                    "object": "chat.completion.chunk",
+                    "created": int(time.time()),
+                    "model": "error",
+                    "choices": [
+                        {
+                            "index": 0,
+                            "delta": {"content": f"⚠️ Gateway Error: {str(exc)}"},
+                            "finish_reason": "error",
+                        }
+                    ],
+                }
+                yield f"data: {json.dumps(err_chunk)}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+
             choice = completion.choices[0] if completion.choices else None
             content = choice.message.content if choice and choice.message.content else ""
             tool_calls = choice.message.tool_calls if choice and choice.message.tool_calls else None
+
+            if not tool_calls and not content:
+                content = "⚠️ [No response message returned from model]"
 
             if tool_calls:
                 tc_chunk = {

@@ -78,9 +78,9 @@ def parse_mode_switch_intent(text: str) -> Optional[str]:
     if not action_match:
         return None
 
-    # Must specifically target agent or mode or tier
+    # Must specifically target agent or mode or tier or ai
     agent_or_mode_mentioned = bool(
-        re.search(r"\b(?:agent|mode|tier|model)\b", cleaned)
+        re.search(r"\b(?:agent|mode|tier|model|ai)\b", cleaned)
         or re.search(r"\b(?:weak|strong|expert|fast|cheap|auto|adaptive|balanced)\b", cleaned)
     )
     if not agent_or_mode_mentioned:

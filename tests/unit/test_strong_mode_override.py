@@ -508,12 +508,15 @@ def test_natural_language_agent_switching_parser():
     assert parse_mode_switch_intent("chage the strong agent to weak agent") == "fast"
     assert parse_mode_switch_intent("change the strong agent to weak agent") == "fast"
     assert parse_mode_switch_intent("switch to weak agent") == "fast"
+    assert parse_mode_switch_intent("switch to weak ai") == "fast"
+    assert parse_mode_switch_intent("switch to weak") == "fast"
     assert parse_mode_switch_intent("use weak agent") == "fast"
     assert parse_mode_switch_intent("go to weak agent") == "fast"
     assert parse_mode_switch_intent("switch to fast mode") == "fast"
 
     # Strong / Expert intents
     assert parse_mode_switch_intent("switch to strong agent") == "strong"
+    assert parse_mode_switch_intent("switch to strong ai") == "strong"
     assert parse_mode_switch_intent("change to strong agent") == "strong"
     assert parse_mode_switch_intent("use strong agent") == "strong"
     assert parse_mode_switch_intent("switch to expert mode") == "expert"
@@ -568,3 +571,104 @@ def test_strong_agent_does_not_borrow_weak_groq_key():
             os.environ["APP_ENV"] = old_env
         else:
             os.environ.pop("APP_ENV", None)
+
+
+@pytest.mark.asyncio
+async def test_hello_routes_and_executes_via_weak_agent():
+    """Trivial prompt 'hello' must route and execute via Weak Agent without falling back to Strong Agent."""
+    from agents.execution_engine import ExecutionEngine
+    from agents.credential_manager import CredentialManager
+    from agents.provider_manager import ProviderManager
+    from agents.router import IntelligentRouter
+    from agents.weak_agent import WeakAgent
+    from agents.strong_agent import StrongAgent
+
+    cm = CredentialManager()
+    cm.store_agent_config("user_hello_test", "weak", "mock", "mock_key", "mock-cheap")
+    cm.store_agent_config("user_hello_test", "strong", "mock", "mock_key", "mock-strong")
+
+    pm = ProviderManager()
+    router = IntelligentRouter()
+    engine = ExecutionEngine(
+        router=router,
+        credential_mgr=cm,
+        weak_agent=WeakAgent(credential_mgr=cm, provider_mgr=pm),
+        strong_agent=StrongAgent(credential_mgr=cm, provider_mgr=pm),
+    )
+
+    resp = await engine.execute_prompt(user_id="user_hello_test", prompt="hello", mode="auto")
+    assert resp.agent == "weak"
+    assert resp.success is True
+    assert resp.routing["fallback_used"] is False
+    assert resp.model == "mock-cheap"
+
+
+@pytest.mark.asyncio
+async def test_weak_agent_stream_prompt_produces_response():
+    """Streaming in fast mode with weak agent must stream tokens and finish with done."""
+    from agents.execution_engine import ExecutionEngine
+    from agents.credential_manager import CredentialManager
+    from agents.provider_manager import ProviderManager
+    from agents.router import IntelligentRouter
+    from agents.weak_agent import WeakAgent
+    from agents.strong_agent import StrongAgent
+
+    cm = CredentialManager()
+    cm.store_agent_config("user_stream_fast", "weak", "mock", "mock_key", "mock-cheap")
+
+    pm = ProviderManager()
+    router = IntelligentRouter()
+    engine = ExecutionEngine(
+        router=router,
+        credential_mgr=cm,
+        weak_agent=WeakAgent(credential_mgr=cm, provider_mgr=pm),
+        strong_agent=StrongAgent(credential_mgr=cm, provider_mgr=pm),
+    )
+
+    events = []
+    async for chunk in engine.stream_prompt(user_id="user_stream_fast", prompt="hello", mode="fast"):
+        events.append(chunk.strip())
+
+    token_events = [e for e in events if '"type": "token"' in e]
+    done_events = [e for e in events if '"type": "done"' in e]
+
+    assert len(token_events) > 0, "Expected token stream events"
+    assert len(done_events) == 1, "Expected single done event"
+    assert "data: [DONE]" in events
+
+
+@pytest.mark.asyncio
+async def test_weak_agent_stream_unconfigured_in_fast_mode_yields_message(monkeypatch):
+    """When weak agent is unconfigured in explicit fast mode, a readable message must be streamed, not dropped."""
+    import uuid
+    from unittest.mock import patch
+    from agents.execution_engine import ExecutionEngine
+    from agents.credential_manager import CredentialManager
+    from agents.provider_manager import ProviderManager
+    from agents.router import IntelligentRouter
+    from agents.weak_agent import WeakAgent
+    from agents.strong_agent import StrongAgent
+    import app.providers.resolver as resolver
+
+    monkeypatch.setattr(resolver, "is_mock_mode_explicitly_enabled", lambda: False)
+
+    cm = CredentialManager()
+    pm = ProviderManager()
+    router = IntelligentRouter()
+    engine = ExecutionEngine(
+        router=router,
+        credential_mgr=cm,
+        weak_agent=WeakAgent(credential_mgr=cm, provider_mgr=pm),
+        strong_agent=StrongAgent(credential_mgr=cm, provider_mgr=pm),
+    )
+
+    unconf_user = f"user_unconf_{uuid.uuid4().hex[:8]}"
+    events = []
+    async for chunk in engine.stream_prompt(user_id=unconf_user, prompt="hello", mode="fast"):
+        events.append(chunk.strip())
+
+    token_events = [e for e in events if '"type": "token"' in e]
+    assert len(token_events) > 0
+    assert "Weak Agent" in token_events[0]
+    assert "data: [DONE]" in events
+

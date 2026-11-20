@@ -143,6 +143,39 @@ class CredentialManager:
                 mode_cursor = conn.execute("SELECT user_id, mode FROM user_session_modes")
                 for mrow in mode_cursor.fetchall():
                     self._session_modes[mrow["user_id"]] = mrow["mode"]
+
+                # Self-healing auto-configuration for default_user weak tier in local/mock environments
+                if ("default_user", "strong") in self._configs and ("default_user", "weak") not in self._configs:
+                    default_weak = AgentConfig(
+                        user_id="default_user",
+                        agent_type="weak",
+                        provider="mock",
+                        encrypted_key=self.crypto.encrypt("mock_weak_key_default"),
+                        model_id="mock-cheap",
+                        is_enabled=True,
+                        created_at=time.time(),
+                        updated_at=time.time(),
+                    )
+                    self._configs[("default_user", "weak")] = default_weak
+                    conn.execute(
+                        """
+                        INSERT OR IGNORE INTO agent_configurations
+                        (user_id, agent_type, provider, encrypted_key, model_id, temperature, max_tokens, is_enabled, created_at, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            "default_user",
+                            "weak",
+                            "mock",
+                            default_weak.encrypted_key,
+                            "mock-cheap",
+                            0.2,
+                            1024,
+                            1,
+                            time.time(),
+                            time.time(),
+                        ),
+                    )
         except Exception:
             pass
         finally:
@@ -274,6 +307,58 @@ class CredentialManager:
                 pass
             finally:
                 conn.close()
+
+        # Fallback resolution strictly for default_user to guarantee out-of-the-box readiness
+        if user_id == "default_user":
+            import os
+            from app.providers.resolver import is_mock_mode_explicitly_enabled
+
+            at = agent_type.lower()
+            if at == "weak":
+                groq_key = os.environ.get("GROQ_API_KEY", "").strip()
+                if len(groq_key) >= 8:
+                    return self.store_agent_config(
+                        user_id="default_user",
+                        agent_type="weak",
+                        provider="groq",
+                        api_key=groq_key,
+                        model_id="llama-3.1-8b-instant",
+                    )
+                if (
+                    is_mock_mode_explicitly_enabled()
+                    or getattr(settings, "ENABLE_MOCK_GATEWAY", False)
+                    or getattr(settings, "APP_ENV", "") == "local"
+                ):
+                    return self.store_agent_config(
+                        user_id="default_user",
+                        agent_type="weak",
+                        provider="mock",
+                        api_key="mock_weak_key_default",
+                        model_id="mock-cheap",
+                    )
+            elif at == "strong":
+                openai_key = os.environ.get("OPENAI_API_KEY", "").strip()
+                if len(openai_key) >= 8:
+                    return self.store_agent_config(
+                        user_id="default_user",
+                        agent_type="strong",
+                        provider="openai",
+                        api_key=openai_key,
+                        model_id="gpt-4o",
+                    )
+                if (
+                    is_mock_mode_explicitly_enabled()
+                    or getattr(settings, "ENABLE_MOCK_GATEWAY", False)
+                    or getattr(settings, "APP_ENV", "") == "local"
+                ):
+                    return self.store_agent_config(
+                        user_id="default_user",
+                        agent_type="strong",
+                        provider="mock",
+                        api_key="mock_strong_key_default",
+                        model_id="mock-strong",
+                    )
+
         return None
 
     def list_agent_configs(self, user_id: str) -> Dict[str, Optional[Dict[str, Any]]]:

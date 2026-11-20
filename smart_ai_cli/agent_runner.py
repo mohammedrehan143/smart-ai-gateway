@@ -588,6 +588,9 @@ class AutonomousAgentRunner:
                     sys.stdout.write("\n\n")
                     sys.stdout.flush()
 
+                    if not full_reply.strip() and not streamed_tool_calls:
+                        console.print(f"{indent_str}[bold yellow]⚠️ No response message received from stream.[/bold yellow]\n")
+
                 else:
                     with console.status(f"{indent_str}[dim cyan]Thinking...[/dim cyan]", spinner="dots"):
                         try:
@@ -624,6 +627,8 @@ class AutonomousAgentRunner:
                         indented_lines = "\n".join(f"{indent_str}{line}" for line in full_reply.splitlines())
                         console.print(indented_lines)
                         console.print()
+                    elif not full_reply.strip() and not streamed_tool_calls:
+                        console.print(f"\n{indent_str}[bold yellow]⚠️ No response message received from model.[/bold yellow]\n")
 
             except Exception as exc:
                 if conversation and conversation[-1].get("role") == "user":

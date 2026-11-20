@@ -1571,11 +1571,36 @@
          ------------------------------------------------------------- -->
     <script>
         // State
-        let currentMode = 'adaptive';
+        let currentMode = 'auto';
         let conversationMessages = [];
         let isStreaming = false;
         let abortController = null;
         let sessionList = [];
+
+        // Natural language mode switch parser
+        function parseModeSwitchIntent(text) {
+            const cleaned = text.trim().toLowerCase();
+            if (cleaned.length > 120) return null;
+            if (!/\b(chage|change|switch|set|select|turn\s+on|activate|use|move\s+to|go\s+to|go\s+back\s+to)\b/.test(cleaned)) {
+                return null;
+            }
+            if (!/\b(agent|mode|tier|model|ai|weak|strong|expert|fast|cheap|auto|adaptive|balanced)\b/.test(cleaned)) {
+                return null;
+            }
+            let targetText = cleaned;
+            if (cleaned.includes(' to ')) {
+                targetText = cleaned.split(' to ')[1];
+            }
+            if (/\b(weak|cheap|fast)\b/.test(targetText)) return 'fast';
+            if (/\b(strong)\b/.test(targetText)) return 'strong';
+            if (/\b(expert)\b/.test(targetText)) return 'expert';
+            if (/\b(auto|adaptive|balanced|dynamic|default)\b/.test(targetText)) return 'auto';
+            if (/\b(weak|cheap|fast)\b/.test(cleaned)) return 'fast';
+            if (/\b(expert)\b/.test(cleaned)) return 'expert';
+            if (/\b(strong)\b/.test(cleaned)) return 'strong';
+            if (/\b(auto|adaptive|balanced|dynamic|default)\b/.test(cleaned)) return 'auto';
+            return null;
+        }
 
         const chatScrollArea = document.getElementById('chat-scroll-area');
         const chatThread = document.getElementById('chat-thread');
@@ -1782,6 +1807,38 @@
             const text = userPrompt.value.trim();
             if (!text || isStreaming) return;
 
+            // Natural language mode and agent switching (e.g. "switch to weak ai", "switch to weak agent", "switch to strong")
+            const switchMode = parseModeSwitchIntent(text);
+            if (switchMode) {
+                appendUserMessage(text);
+                userPrompt.value = '';
+                autoResizeTextarea(userPrompt);
+
+                setRoutingMode(switchMode);
+                let modeDesc = 'Auto Mode (Dynamic intelligent routing per prompt)';
+                if (switchMode === 'fast') modeDesc = 'Weak Agent (Fast mode - cost & speed optimized)';
+                else if (switchMode === 'strong') modeDesc = 'Strong Agent (Strong mode - high reasoning effort)';
+                else if (switchMode === 'expert') modeDesc = 'Expert Agent (Expert mode - maximum reasoning & verification)';
+                else if (switchMode === 'balanced') modeDesc = 'Balanced Mode (Optimal quality & cost)';
+
+                const switchSlot = createAssistantMessageSlot();
+                const isStrong = switchMode === 'strong' || switchMode === 'expert';
+                switchSlot.avatar.className = `assistant-avatar ${isStrong ? 'strong' : 'weak'}`;
+                switchSlot.avatar.innerText = isStrong ? '🟣' : '🟢';
+                switchSlot.metaHeader.innerHTML = `
+                    <span class="agent-badge-inline ${isStrong ? 'strong' : 'weak'}">✔ MODE SWITCHED</span>
+                    <span class="assistant-model-tag">${modeDesc}</span>
+                `;
+                const confirmationMsg = `✔ Switched to **${modeDesc}**.\n\nSubsequent prompts will be processed using this agent tier.`;
+                switchSlot.contentDiv.innerHTML = renderMarkdown(confirmationMsg);
+                conversationMessages.push({ role: 'assistant', content: confirmationMsg });
+                btnSubmit.disabled = false;
+                btnSubmit.innerHTML = '<span id="btn-icon-content">↑</span>';
+                isStreaming = false;
+                userPrompt.focus();
+                return;
+            }
+
             appendUserMessage(text);
             userPrompt.value = '';
             autoResizeTextarea(userPrompt);
@@ -1851,6 +1908,11 @@
                                     // Live preview while streaming
                                     slot.contentDiv.innerHTML = renderMarkdown(fullReply) + '<span class="cursor-blink"></span>';
                                     scrollToBottom();
+                                } else if (data.type === 'error') {
+                                    const errorText = data.error || data.message || 'An error occurred during inference.';
+                                    fullReply += (fullReply ? '\n\n' : '') + `> ⚠️ **Gateway Notice:** ${errorText}`;
+                                    slot.contentDiv.innerHTML = renderMarkdown(fullReply) + '<span class="cursor-blink"></span>';
+                                    scrollToBottom();
                                 } else if (data.type === 'done') {
                                     usageMeta = data;
                                 }
@@ -1862,6 +1924,9 @@
                 }
 
                 // Finalize Rendered Content
+                if (!fullReply.trim()) {
+                    fullReply = '⚠️ *No response message was received from the model. Please check the model status and provider configuration in Agent Settings.*';
+                }
                 slot.contentDiv.innerHTML = renderMarkdown(fullReply);
                 decorateCodeBlocks(slot.contentDiv);
 
