@@ -224,3 +224,31 @@ def test_shared_tools_verification_guarantee(tmp_path):
     ok, msg = edit_file(str(file_path), "NonExistentString", "Replacement")
     assert ok is False
     assert "not found" in msg
+
+
+def test_user_scenario_login_page_creation(tmp_path, monkeypatch):
+    """Verifies that ask/do creates login.html when prompt has typos like 'login.htmla nd'."""
+    target_file = tmp_path / "login.html"
+
+    def mock_chat(self, messages, tools=None, policy="adaptive", temperature=0.2, **kwargs):
+        # Model responds with markdown code block
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "content": "Here is the login page.\n\n```html\n<!DOCTYPE html>\n<html>\n<body><h1>Login</h1></body>\n</html>\n```",
+                        "tool_calls": None,
+                    }
+                }
+            ],
+            "routing": {"tier": "cheap", "policy": policy},
+            "usage": {"total_tokens": 50},
+        }
+
+    monkeypatch.setattr(GatewayClient, "chat", mock_chat)
+    monkeypatch.chdir(tmp_path)
+
+    res = runner.invoke(app, ["ask", "create a login page for me in this folder name the file as login.htmla nd save it in this folder"])
+    assert res.exit_code == 0
+    assert target_file.exists()
+    assert "<!DOCTYPE html>" in target_file.read_text(encoding="utf-8")

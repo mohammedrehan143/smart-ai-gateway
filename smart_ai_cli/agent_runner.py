@@ -29,8 +29,52 @@ class AgentTaskResult:
     error: Optional[str] = None
 
 
-def extract_action_blocks(content: str) -> List[Dict[str, Any]]:
-    """Extracts fallback ```action:<tool_name>\n{...}``` codeblocks if model didn't use native tool_calls."""
+def clean_typos(text: str) -> str:
+    """Fixes common CLI typing errors like 'login.htmla nd' -> 'login.html and'."""
+    return re.sub(r"\.([a-zA-Z0-9]+)a\s*nd\b", r".\1 and", text, flags=re.IGNORECASE)
+
+
+def extract_target_filename(prompt: Optional[str], content: str) -> Optional[str]:
+    """Extracts target filename from task prompt, model text, or file mentions."""
+    search_texts: List[str] = []
+    if prompt:
+        search_texts.append(clean_typos(prompt))
+    search_texts.append(content)
+
+    filename_patterns = [
+        # name the file as login.html / name the file login.html / named as login.html / File: login.html
+        r"(?:name\s+(?:the\s+)?file\s+(?:as\s+)?|named\s+(?:as\s+)?|filename\s*[:=]\s*|save\s+(?:it\s+)?(?:as|to|in)\s+|file\s*:\s*)[\*`\'\"]*([a-zA-Z0-9_\-./\\]+\.[a-zA-Z0-9]+)[\*`\'\"]*",
+        # file named login.html / file called login.html
+        r"file\s+(?:named|called)\s+[\*`\'\"]*([a-zA-Z0-9_\-./\\]+\.[a-zA-Z0-9]+)[\*`\'\"]*",
+        # **login.html** file / `login.html` file
+        r"[\*`\'\"]*([a-zA-Z0-9_\-./\\]+\.[a-zA-Z0-9]+)[\*`\'\"]*\s+file",
+        # create / make / write / save login.html
+        r"\b(?:create|make|write|touch|save)\s+[\*`\'\"]*([a-zA-Z0-9_\-./\\]+\.[a-zA-Z0-9]+)[\*`\'\"]*",
+        # Markdown bold / backtick filename
+        r"[\*`\'\"]([a-zA-Z0-9_\-./\\]+\.(?:html?|py|js|ts|jsx|tsx|css|json|md|txt|ya?ml|sh|sql))[\*`\'\"]",
+        # Specific known extensions mentioned in text
+        r"\b([a-zA-Z0-9_\-]+\.(?:html?|py|js|ts|jsx|tsx|css|json|md|txt|ya?ml|sh|sql))\b",
+    ]
+
+    for text in search_texts:
+        for pat in filename_patterns:
+            m = re.search(pat, text, re.IGNORECASE)
+            if m:
+                fn = m.group(1).strip().strip("`*'\"").rstrip(".,;:)")
+                if fn and "." in fn and not fn.endswith("."):
+                    return fn
+
+    # Default heuristic based on prompt content
+    if prompt:
+        p_lower = prompt.lower()
+        if "login" in p_lower and ("page" in p_lower or "html" in p_lower):
+            return "login.html"
+
+    return None
+
+
+def extract_action_blocks(content: str, task_prompt: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Extracts action codeblocks or synthesizes actions from code blocks and task prompt."""
     actions: List[Dict[str, Any]] = []
 
     # 1. Standard ```action:<tool_name>\n{...}``` or ```tool:<tool_name>\n{...}```
@@ -66,25 +110,41 @@ def extract_action_blocks(content: str) -> List[Dict[str, Any]]:
     if actions:
         return actions
 
-    # 3. Fallback heuristic: Model responded with filename mention and markdown code block
-    file_msg_match = re.search(
-        r"(?:file|created|written|named)\s+[\*`\'\"]*([a-zA-Z0-9_\-./\\]+\.[a-zA-Z0-9]+)[\*`\'\"]*",
-        content,
-        re.IGNORECASE,
-    )
-    code_block_match = re.search(r"```[a-zA-Z0-9_-]*\s*\n([\s\S]*?)```", content)
-    if file_msg_match and code_block_match:
-        extracted_path = file_msg_match.group(1).strip()
-        extracted_content = code_block_match.group(1)
-        actions.append(
-            {
-                "id": None,
-                "name": "write_file",
-                "args": {"path": extracted_path, "content": extracted_content},
-                "native": False,
-                "raw": code_block_match.group(0),
-            }
-        )
+    # 3. Fallback heuristic: Extract filename and markdown code block
+    extracted_path = extract_target_filename(task_prompt, content)
+    code_block_match = re.search(r"```([a-zA-Z0-9_\-.:]*)\s*\n([\s\S]*?)(?:```|$)", content)
+    if code_block_match:
+        lang_tag = code_block_match.group(1).strip()
+        extracted_content = code_block_match.group(2).strip()
+
+        if ":" in lang_tag and not extracted_path:
+            extracted_path = lang_tag.split(":", 1)[1].strip()
+        elif "." in lang_tag and not extracted_path:
+            extracted_path = lang_tag.strip()
+
+        if not extracted_path:
+            if "<!DOCTYPE html>" in extracted_content or "<html" in extracted_content:
+                extracted_path = "index.html"
+            elif "def " in extracted_content or "import " in extracted_content:
+                extracted_path = "script.py"
+
+        if extracted_path and extracted_content:
+            # If HTML file was truncated before closing tags, close them gracefully
+            if extracted_path.endswith((".html", ".htm")):
+                if "<html" in extracted_content.lower() and "</html>" not in extracted_content.lower():
+                    if "</body>" not in extracted_content.lower():
+                        extracted_content += "\n</body>"
+                    extracted_content += "\n</html>\n"
+
+            actions.append(
+                {
+                    "id": None,
+                    "name": "write_file",
+                    "args": {"path": extracted_path, "content": extracted_content},
+                    "native": False,
+                    "raw": code_block_match.group(0),
+                }
+            )
 
     return actions
 
@@ -104,6 +164,7 @@ class AutonomousAgentRunner:
         cwd: Optional[str] = None,
     ) -> AgentTaskResult:
         """Executes an autonomous task with tool execution loop."""
+        task_prompt = clean_typos(task_prompt)
         work_dir = Path(cwd or ".").resolve()
         result = AgentTaskResult(prompt=task_prompt, steps_taken=0)
 
@@ -129,12 +190,42 @@ class AutonomousAgentRunner:
             console.print(f"[dim]Step {step}/{self.max_steps} — Consulting Gateway models...[/dim]")
 
             try:
-                resp = self.client.chat(
-                    messages=messages,
-                    tools=TOOL_DEFINITIONS,
-                    policy=policy,
-                    temperature=temperature,
-                )
+                try:
+                    resp = self.client.chat(
+                        messages=messages,
+                        tools=TOOL_DEFINITIONS,
+                        policy=policy,
+                        temperature=temperature,
+                        max_output_tokens=3072,
+                    )
+                except TypeError:
+                    resp = self.client.chat(
+                        messages=messages,
+                        tools=TOOL_DEFINITIONS,
+                        policy=policy,
+                        temperature=temperature,
+                    )
+
+                choices = resp.get("choices", [])
+                choice_msg = choices[0].get("message", {}) if choices else {}
+                content = choice_msg.get("content") or ""
+                native_tool_calls = choice_msg.get("tool_calls") or []
+
+                # Fallback if model choked on native tools
+                if not content.strip() and not native_tool_calls:
+                    try:
+                        resp = self.client.chat(
+                            messages=messages,
+                            policy=policy,
+                            temperature=temperature,
+                            max_output_tokens=3072,
+                        )
+                    except TypeError:
+                        resp = self.client.chat(
+                            messages=messages,
+                            policy=policy,
+                            temperature=temperature,
+                        )
             except AuthenticationError as exc:
                 result.success = False
                 result.error = str(exc)
@@ -190,7 +281,7 @@ class AutonomousAgentRunner:
                     )
             else:
                 # Check for action blocks in content
-                block_actions = extract_action_blocks(content)
+                block_actions = extract_action_blocks(content, task_prompt=task_prompt)
                 for ba in block_actions:
                     actions_to_run.append(
                         {
@@ -512,7 +603,7 @@ class AutonomousAgentRunner:
                         }
                     )
             else:
-                block_actions = extract_action_blocks(full_reply)
+                block_actions = extract_action_blocks(full_reply, task_prompt=user_input)
                 for ba in block_actions:
                     actions_to_run.append(
                         {

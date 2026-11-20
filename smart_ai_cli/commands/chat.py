@@ -28,6 +28,30 @@ ACTION_PROMPT_REGEX = re.compile(
 )
 
 
+def clean_action_typos(text: str) -> str:
+    """Fixes common CLI typing errors like 'login.htmla nd' -> 'login.html and'."""
+    return re.sub(r"\.([a-zA-Z0-9]+)a\s*nd\b", r".\1 and", text, flags=re.IGNORECASE)
+
+
+def is_action_prompt(text: str) -> bool:
+    """Detects if a user query is an action/task command to create, modify, or save files on disk."""
+    cleaned = clean_action_typos(text.strip())
+
+    verbs = r"\b(?:create|make|write|build|generate|add|save|edit|update|modify|read|list|delete|touch)\b"
+    targets = r"\b(?:file|folder|directory|script|code|page|webpage|component|app|template|[\w\-.]+\.(?:html?|py|js|ts|jsx|tsx|css|json|md|txt|ya?ml|sh|sql))\b"
+    phrases = r"(?:in\s+this\s+(?:folder|directory)|name\s+(?:the\s+)?file\s+(?:as\s+)?|save\s+(?:it\s+)?(?:as|to|in)\s+|on\s+disk)"
+
+    if re.search(verbs, cleaned, re.IGNORECASE) and (
+        re.search(targets, cleaned, re.IGNORECASE) or re.search(phrases, cleaned, re.IGNORECASE)
+    ):
+        return True
+
+    if ACTION_PROMPT_REGEX.match(cleaned):
+        return True
+
+    return False
+
+
 def parse_mode_switch_intent(text: str) -> Optional[str]:
     """Detects natural language intent to switch agent or gateway mode.
 
@@ -261,9 +285,9 @@ def chat_cmd(
             console.print(f"{CHAT_INDENT}[bold green]✔[/bold green] Switched to [bold magenta]{desc}[/bold magenta].")
             continue
 
-        effective_prompt = user_input
+        effective_prompt = clean_action_typos(user_input)
         if user_input.startswith("/do ") or user_input.startswith("/task "):
-            effective_prompt = user_input.split(" ", 1)[1].strip()
+            effective_prompt = clean_action_typos(user_input.split(" ", 1)[1].strip())
 
         try:
             agent_runner.execute_interactive_turn(
@@ -338,11 +362,12 @@ def ask_cmd(
     active_mode = mode.lower() if mode else None
 
     # Check if this is an autonomous file/task operation
-    is_action_prompt = bool(ACTION_PROMPT_REGEX.match(prompt.strip()))
-    if agent_mode or is_action_prompt:
+    effective_prompt = clean_action_typos(prompt.strip())
+    is_action = agent_mode or is_action_prompt(effective_prompt)
+    if is_action:
         runner = AutonomousAgentRunner()
         res = runner.execute_task(
-            task_prompt=prompt,
+            task_prompt=effective_prompt,
             policy=active_policy,
             temperature=active_temp,
         )
